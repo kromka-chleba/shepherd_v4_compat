@@ -48,23 +48,10 @@ local group_to_labels = {
     ["wet_sediment"] = {"moisture_spread"},
     ["drops_leaves"] = {"leaves"},
     ["leaf_marker"] = {"leaves_dropped"},
-    -- The 'spreading' group is assigned to spring/summer seasonal soils
-    -- (winter soils and roots explicitly have spreading=nil or 0)
-    ["spreading"] = {"seasonal_plants"},
-}
-
--- Seasonal soil mappings require checking specific node patterns
--- Spring soils typically have "spring" or nodes with spreading group
--- Winter soils are derived from spring soils and have "winter" in name
-local seasonal_soil_patterns = {
-    spring = {
-        patterns = {"_spring_", "_spring$", "^spring_"},
-        labels = {"spring_soil", "seasonal_plants"},
-    },
-    winter = {
-        patterns = {"_winter_", "_winter$", "^winter_"},
-        labels = {"winter_soil", "seasonal_plants"},
-    },
+    -- The 'spreading' group marks spring/seasonal soils (nodes_nature soil nodes
+    -- with grass on top, e.g. woodland_soil, grassland_soil). Winter soils and
+    -- bare sediments do not have this group.
+    ["spreading"] = {"seasonal_plants", "spring_soil"},
 }
 
 -- Check if a node belongs to a group
@@ -92,18 +79,6 @@ local function get_labels_for_node(node_name)
         if node_has_group(node_name, group) then
             for _, label in ipairs(group_labels) do
                 table.insert(labels, label)
-            end
-        end
-    end
-    
-    -- Seasonal soil pattern matching
-    for season, info in pairs(seasonal_soil_patterns) do
-        for _, pattern in ipairs(info.patterns) do
-            if string.find(node_name, pattern) then
-                for _, label in ipairs(info.labels) do
-                    table.insert(labels, label)
-                end
-                break
             end
         end
     end

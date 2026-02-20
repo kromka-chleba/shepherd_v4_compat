@@ -1,4 +1,5 @@
-local secenv = core.request_insecure_environment()
+-- Note: insecure environment must be requested in init.lua; retrieve it from the module table
+local secenv = shepherd_v4_compat and shepherd_v4_compat.secenv
 local sql
 
 -- The `map.sqlite` table has different structures depending on Luanti version:

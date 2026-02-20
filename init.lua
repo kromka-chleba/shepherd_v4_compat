@@ -8,7 +8,10 @@ local mod_path = core.get_modpath(mod_name)
 core.log("action", "[" .. mod_name .. "] Loading shepherd v4 compatibility...")
 
 -- Try to use insecure environment for SQL-based compatibility first
+-- Note: core.request_insecure_environment() MUST be called only from init.lua
 local secenv = core.request_insecure_environment()
+shepherd_v4_compat = shepherd_v4_compat or {}
+shepherd_v4_compat.secenv = secenv  -- Store for use by submodules (dofile'd files)
 local sql_loaded = false
 
 if secenv then

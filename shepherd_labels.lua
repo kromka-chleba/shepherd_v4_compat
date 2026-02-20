@@ -5,7 +5,8 @@
 local mod_name = "shepherd_v4_compat"
 
 -- This file requires insecure environment and will only run if available
-local secenv = core.request_insecure_environment()
+-- Note: insecure environment must be requested in init.lua; retrieve it from the module table
+local secenv = shepherd_v4_compat and shepherd_v4_compat.secenv
 if not secenv then
     core.log("warning", "[" .. mod_name .. "] shepherd_labels.lua requires insecure environment")
     return false

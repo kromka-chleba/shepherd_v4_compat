@@ -5,7 +5,8 @@
 local mod_name = "shepherd_v4_compat"
 
 -- This file requires insecure environment and will only run if available
-local secenv = core.request_insecure_environment()
+-- Note: insecure environment must be requested in init.lua; retrieve it from the module table
+local secenv = shepherd_v4_compat and shepherd_v4_compat.secenv
 if not secenv then
     core.log("warning", "[" .. mod_name .. "] shepherd_labels.lua requires insecure environment")
     return false
@@ -20,6 +21,8 @@ end
 mapchunk_shepherd = mapchunk_shepherd  -- Ensure global is loaded before accessing
 assert(mapchunk_shepherd, "mapchunk_shepherd mod must be loaded before shepherd_v4_compat")
 local ms = mapchunk_shepherd
+
+local storage = core.get_mod_storage()
 
 -- Node to label mappings based on shepherd_v3_compat patterns
 -- Multiple labels can be assigned to a position
@@ -45,23 +48,10 @@ local group_to_labels = {
     ["wet_sediment"] = {"moisture_spread"},
     ["drops_leaves"] = {"leaves"},
     ["leaf_marker"] = {"leaves_dropped"},
-    -- The 'spreading' group is assigned to spring/summer seasonal soils
-    -- (winter soils and roots explicitly have spreading=nil or 0)
-    ["spreading"] = {"seasonal_plants"},
-}
-
--- Seasonal soil mappings require checking specific node patterns
--- Spring soils typically have "spring" or nodes with spreading group
--- Winter soils are derived from spring soils and have "winter" in name
-local seasonal_soil_patterns = {
-    spring = {
-        patterns = {"_spring_", "_spring$", "^spring_"},
-        labels = {"spring_soil", "seasonal_plants"},
-    },
-    winter = {
-        patterns = {"_winter_", "_winter$", "^winter_"},
-        labels = {"winter_soil", "seasonal_plants"},
-    },
+    -- The 'spreading' group marks spring/seasonal soils (nodes_nature soil nodes
+    -- with grass on top, e.g. woodland_soil, grassland_soil). Winter soils and
+    -- bare sediments do not have this group.
+    ["spreading"] = {"seasonal_plants", "spring_soil"},
 }
 
 -- Check if a node belongs to a group
@@ -89,18 +79,6 @@ local function get_labels_for_node(node_name)
         if node_has_group(node_name, group) then
             for _, label in ipairs(group_labels) do
                 table.insert(labels, label)
-            end
-        end
-    end
-    
-    -- Seasonal soil pattern matching
-    for season, info in pairs(seasonal_soil_patterns) do
-        for _, pattern in ipairs(info.patterns) do
-            if string.find(node_name, pattern) then
-                for _, label in ipairs(info.labels) do
-                    table.insert(labels, label)
-                end
-                break
             end
         end
     end
@@ -148,6 +126,11 @@ end
 
 -- Run the migration
 local function run_migration()
+    if storage:get_string("migration_complete") == "true" then
+        core.log("action", "[" .. mod_name .. "] Migration already done, skipping.")
+        return
+    end
+
     core.log("action", "[" .. mod_name .. "] Starting mapblock label migration...")
     
     -- Send initial message to all connected players
@@ -190,6 +173,7 @@ local function run_migration()
     )
     core.log("action", completion_msg)
     core.chat_send_all(completion_msg)
+    storage:set_string("migration_complete", "true")
 end
 
 -- Execute migration on mod load

@@ -22,6 +22,8 @@ mapchunk_shepherd = mapchunk_shepherd  -- Ensure global is loaded before accessi
 assert(mapchunk_shepherd, "mapchunk_shepherd mod must be loaded before shepherd_v4_compat")
 local ms = mapchunk_shepherd
 
+local storage = core.get_mod_storage()
+
 -- Node to label mappings based on shepherd_v3_compat patterns
 -- Multiple labels can be assigned to a position
 local node_to_labels = {
@@ -149,6 +151,11 @@ end
 
 -- Run the migration
 local function run_migration()
+    if storage:get_string("migration_complete") == "true" then
+        core.log("action", "[" .. mod_name .. "] Migration already done, skipping.")
+        return
+    end
+
     core.log("action", "[" .. mod_name .. "] Starting mapblock label migration...")
     
     -- Send initial message to all connected players
@@ -191,6 +198,7 @@ local function run_migration()
     )
     core.log("action", completion_msg)
     core.chat_send_all(completion_msg)
+    storage:set_string("migration_complete", "true")
 end
 
 -- Execute migration on mod load

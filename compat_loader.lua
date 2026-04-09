@@ -1,6 +1,5 @@
-local namespace = shepherd_v4_compat
-local mod_name = namespace.mod_name
-local mod_path = namespace.mod_path
+local mod_name = shepherd_v4_compat.mod_name
+local mod_path = shepherd_v4_compat.mod_path
 
 core.log("action", "[" .. mod_name .. "] Loading shepherd v4 compatibility...")
 
@@ -9,8 +8,7 @@ assert(mapchunk_shepherd, string.format(
     mod_name
 ))
 
-local secenv = namespace.secenv
-namespace.secenv = secenv
+local secenv = shepherd_v4_compat.secenv
 local sql_loaded = false
 
 if secenv then

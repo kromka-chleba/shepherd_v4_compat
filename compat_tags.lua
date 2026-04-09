@@ -1,6 +1,4 @@
-local namespace = shepherd_v4_compat
-local mod_name = namespace.mod_name
-local ms = mapchunk_shepherd
+local mod_name = shepherd_v4_compat.mod_name
 
 -- Tags used by this compatibility module for mapchunk labels.
 local compat_tags = {
@@ -18,6 +16,7 @@ local compat_tags = {
 
 -- Verify all compatibility tags exist (they are expected to be defined by Exile).
 local function ensure_compat_tags_defined()
+    local ms = mapchunk_shepherd
     if not (ms and ms.tag and ms.tag.check) then
         core.log("error", "[" .. mod_name .. "] mapchunk_shepherd tag API is unavailable")
         return false
@@ -42,5 +41,5 @@ local function ensure_compat_tags_defined()
     return true
 end
 
-namespace.compat_tags = compat_tags
-namespace.ensure_compat_tags_defined = ensure_compat_tags_defined
+shepherd_v4_compat.compat_tags = compat_tags
+shepherd_v4_compat.ensure_compat_tags_defined = ensure_compat_tags_defined

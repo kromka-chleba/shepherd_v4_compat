@@ -117,7 +117,7 @@ Position is stored as separate x, y, z columns.
 ## Performance
 
 **SQL-Based Migration:**
-- Runs once on server start and processes all existing mapblocks
+- Runs once shortly after mods are loaded (deferred) and processes all existing mapblocks
 - Processing time depends on world size
 - Progress is logged every 1000 mapblocks
 - Total processing time is reported when complete
@@ -134,7 +134,11 @@ You can enable additional logging to inspect label writes and positions:
 ```conf
 shepherd_v4_debug_labels = true
 shepherd_v4_debug_log_limit = 30
+shepherd_v4_migration_defer_seconds = 3
 ```
+
+
+If migration appears to start too early in your stack, increase `shepherd_v4_migration_defer_seconds`.
 
 When enabled, the mod logs:
 - Sampled mapblocks that produced labels (mapblock position, node position, mapchunk hash, labels, matched node names)

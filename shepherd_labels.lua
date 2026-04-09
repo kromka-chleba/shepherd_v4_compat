@@ -26,14 +26,25 @@ local storage = core.get_mod_storage()
 local debug_labels = core.settings:get_bool("shepherd_v4_debug_labels", false)
 local debug_label_log_limit_raw = core.settings:get("shepherd_v4_debug_log_limit")
 local debug_label_log_limit = tonumber(debug_label_log_limit_raw) or 30
+local migration_defer_seconds_raw = core.settings:get("shepherd_v4_migration_defer_seconds")
+local migration_defer_seconds = tonumber(migration_defer_seconds_raw) or 3
 if debug_label_log_limit_raw and tonumber(debug_label_log_limit_raw) == nil then
     core.log("warning", string.format(
         "[%s] Invalid shepherd_v4_debug_log_limit='%s'; using default 30",
         mod_name, tostring(debug_label_log_limit_raw)
     ))
 end
+if migration_defer_seconds_raw and tonumber(migration_defer_seconds_raw) == nil then
+    core.log("warning", string.format(
+        "[%s] Invalid shepherd_v4_migration_defer_seconds='%s'; using default 3",
+        mod_name, tostring(migration_defer_seconds_raw)
+    ))
+end
 if debug_label_log_limit < 0 then
     debug_label_log_limit = 0
+end
+if migration_defer_seconds < 0 then
+    migration_defer_seconds = 0
 end
 local max_sampled_nodes_per_block = 8
 local debug_logged_labeled_blocks = 0
@@ -43,6 +54,8 @@ local debug_stats = {
     unlabeled_blocks = 0,
     label_hits = {},
 }
+local migration_scheduled = false
+local migration_running = false
 
 -- Node to label mappings based on shepherd_v3_compat patterns
 -- Multiple labels can be assigned to a position
@@ -267,14 +280,21 @@ end
 
 -- Run the migration
 local function run_migration()
+    if migration_running then
+        return
+    end
+    migration_running = true
+
     if storage:get_string("migration_complete") == "true" then
         core.log("action", "[" .. mod_name .. "] Migration already done, skipping.")
+        migration_running = false
         return
     end
 
     if shepherd_v4_compat and shepherd_v4_compat.ensure_compat_tags_defined then
         if not shepherd_v4_compat.ensure_compat_tags_defined() then
             core.log("error", "[" .. mod_name .. "] Migration aborted: required Exile tags are not defined")
+            migration_running = false
             return
         end
     end
@@ -286,6 +306,7 @@ local function run_migration()
             "[%s] Migration aborted: shepherd database API must provide callable purge() and initialize() methods",
             mod_name
         ))
+        migration_running = false
         return
     end
     core.log("action", "[" .. mod_name .. "] Purging shepherd database before migration relabeling...")
@@ -353,10 +374,34 @@ local function run_migration()
     end
     core.chat_send_all(completion_msg)
     storage:set_string("migration_complete", "true")
+    migration_running = false
 end
 
--- Execute migration on mod load
-core.after(0, run_migration)
+local function schedule_migration(trigger)
+    if migration_scheduled then
+        return
+    end
+    migration_scheduled = true
+
+    core.log("action", string.format(
+        "[%s] Scheduling migration in %d second(s) (trigger: %s)",
+        mod_name, migration_defer_seconds, tostring(trigger)
+    ))
+
+    core.after(migration_defer_seconds, run_migration)
+end
+
+-- Execute migration after all mods are loaded (deferred to avoid startup ordering races)
+core.register_on_mods_loaded(function()
+    schedule_migration("on_mods_loaded")
+end)
+
+-- Safety fallback: if startup callback timing differs, trigger on first join
+core.register_on_joinplayer(function()
+    if storage:get_string("migration_complete") ~= "true" then
+        schedule_migration("on_joinplayer")
+    end
+end)
 
 -- Return true to indicate successful loading
 return true

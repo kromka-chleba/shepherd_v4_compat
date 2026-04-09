@@ -25,35 +25,35 @@ local compat_tags = {
     "winter_soil",
 }
 
--- Register all compatibility tags before any label writes happen.
-local function ensure_compat_tags_registered()
-    if not (ms.tag and ms.tag.check and ms.tag.register) then
+-- Verify all compatibility tags exist (they are expected to be defined by Exile).
+local function ensure_compat_tags_defined()
+    if not (ms.tag and ms.tag.check) then
         core.log("error", "[" .. mod_name .. "] mapchunk_shepherd tag API is unavailable")
         return false
     end
 
-    local registered = 0
+    local missing = {}
     for _, tag in ipairs(compat_tags) do
         if not ms.tag.check(tag) then
-            ms.tag.register(tag)
-            registered = registered + 1
+            table.insert(missing, tag)
         end
     end
 
-    core.log("action", string.format(
-        "[%s] Verified compatibility tag registrations (%d newly registered)",
-        mod_name, registered
-    ))
+    if #missing > 0 then
+        core.log("error", string.format(
+            "[%s] Missing required Exile tags: %s",
+            mod_name, table.concat(missing, ", ")
+        ))
+        return false
+    end
+
+    core.log("action", "[" .. mod_name .. "] Verified required Exile tags for compatibility")
     return true
 end
 
 shepherd_v4_compat = shepherd_v4_compat or {}
-shepherd_v4_compat.ensure_compat_tags_registered = ensure_compat_tags_registered
+shepherd_v4_compat.ensure_compat_tags_defined = ensure_compat_tags_defined
 shepherd_v4_compat.compat_tags = compat_tags
-
-if not ensure_compat_tags_registered() then
-    error("[" .. mod_name .. "] Cannot initialize mod: failed to register compatibility tags")
-end
 
 -- Try to use insecure environment for SQL-based compatibility first
 -- Note: core.request_insecure_environment() MUST be called only from init.lua

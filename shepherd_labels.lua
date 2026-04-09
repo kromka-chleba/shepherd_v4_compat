@@ -131,6 +131,13 @@ local function run_migration()
         return
     end
 
+    if shepherd_v4_compat and shepherd_v4_compat.ensure_compat_tags_defined then
+        if not shepherd_v4_compat.ensure_compat_tags_defined() then
+            core.log("error", "[" .. mod_name .. "] Migration aborted: required Exile tags are not defined")
+            return
+        end
+    end
+
     if not (ms.database and ms.database.purge and ms.database.initialize) then
         core.log("error", "[" .. mod_name .. "] Migration aborted: shepherd database API is missing required methods (purge/initialize)")
         return

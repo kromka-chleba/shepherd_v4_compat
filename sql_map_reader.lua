@@ -116,8 +116,7 @@ function sql_map_reader.read_mapblock_nodes(block_pos)
     local cid_to_local_id = {}
     local next_local_id = 0
 
-    for i = 1, #voxel_data do
-        local cid = voxel_data[i]
+    local function collect_node(cid)
         local node_name = cid_name_cache[cid]
         if not node_name then
             node_name = core.get_name_from_content_id(cid) or "unknown"
@@ -131,6 +130,21 @@ function sql_map_reader.read_mapblock_nodes(block_pos)
             next_local_id = next_local_id + 1
             cid_to_local_id[cid] = local_id
             id_name_table[local_id] = node_name
+        end
+    end
+
+    if #voxel_data == 4096 then
+        for i = 1, 4096 do
+            collect_node(voxel_data[i])
+        end
+    else
+        local area = VoxelArea:new({MinEdge = emin, MaxEdge = emax})
+        for z = minp.z, maxp.z do
+            for y = minp.y, maxp.y do
+                for x = minp.x, maxp.x do
+                    collect_node(voxel_data[area:index(x, y, z)])
+                end
+            end
         end
     end
 

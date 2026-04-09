@@ -44,6 +44,8 @@ if sql then
     db = sql.open(filespec)
 end
 assert(db)
+local vm = core.get_voxel_manip()
+local cid_name_cache = {}
 
 -- Export functions for use by other files in this mod
 local sql_map_reader = {}
@@ -90,7 +92,6 @@ function sql_map_reader.decode_mapblock(block_data, block_pos)
     local minp = vector.new(block_pos.x * 16, block_pos.y * 16, block_pos.z * 16)
     local maxp = vector.new(minp.x + 15, minp.y + 15, minp.z + 15)
 
-    local vm = core.get_voxel_manip()
     local emin, emax = vm:read_from_map(minp, maxp)
     if not emin or not emax then
         return {
@@ -113,7 +114,11 @@ function sql_map_reader.decode_mapblock(block_data, block_pos)
             for x = minp.x, maxp.x do
                 local vi = area:index(x, y, z)
                 local cid = voxel_data[vi]
-                local node_name = core.get_name_from_content_id(cid) or "unknown"
+                local node_name = cid_name_cache[cid]
+                if not node_name then
+                    node_name = core.get_name_from_content_id(cid) or "unknown"
+                    cid_name_cache[cid] = node_name
+                end
                 nodes[#nodes + 1] = node_name
 
                 local local_id = cid_to_local_id[cid]

@@ -434,7 +434,7 @@ local function request_force_migration_confirmation(name)
     cleanup_expired_force_confirmations(now)
     pending_force_confirmations[name] = now + force_confirmation_window_seconds
     return false, string.format(
-        "WARNING: This will erase and rebuild all shepherd database labels. Run /shepherd_v4_migrate_confirm within %d seconds to proceed.",
+        "Warning: This will erase and rebuild all shepherd database labels. Run /shepherd_v4_migrate_confirm within %d seconds to proceed.",
         force_confirmation_window_seconds
     )
 end

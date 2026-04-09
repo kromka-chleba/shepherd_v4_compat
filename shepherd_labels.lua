@@ -24,7 +24,14 @@ local ms = mapchunk_shepherd
 
 local storage = core.get_mod_storage()
 local debug_labels = core.settings:get_bool("shepherd_v4_debug_labels", false)
-local debug_label_log_limit = tonumber(core.settings:get("shepherd_v4_debug_log_limit")) or 30
+local debug_label_log_limit_raw = core.settings:get("shepherd_v4_debug_log_limit")
+local debug_label_log_limit = tonumber(debug_label_log_limit_raw) or 30
+if debug_label_log_limit_raw and tonumber(debug_label_log_limit_raw) == nil then
+    core.log("warning", string.format(
+        "[%s] Invalid shepherd_v4_debug_log_limit='%s'; using default 30",
+        mod_name, tostring(debug_label_log_limit_raw)
+    ))
+end
 if debug_label_log_limit < 0 then
     debug_label_log_limit = 0
 end

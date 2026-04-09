@@ -138,8 +138,11 @@ local function run_migration()
         end
     end
 
-    if not (ms.database and ms.database.purge and ms.database.initialize) then
-        core.log("error", "[" .. mod_name .. "] Migration aborted: shepherd database API is missing required methods (purge/initialize)")
+    if not (ms.database
+            and type(ms.database.purge) == "function"
+            and type(ms.database.initialize) == "function") then
+        core.log("error",
+            "[" .. mod_name .. "] Migration aborted: shepherd database API must provide callable purge() and initialize() methods")
         return
     end
     core.log("action", "[" .. mod_name .. "] Purging shepherd database before migration relabeling...")

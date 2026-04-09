@@ -352,44 +352,44 @@ end
 
 -- Run the migration
 local function run_migration()
+    local function finish_run(clear_purge_arm)
+        migration_scheduled = false
+        if clear_purge_arm then
+            migration_armed_by_purge = false
+        end
+        migration_running = false
+    end
+
     if migration_running then
         return
     end
     migration_running = true
 
     if should_skip_migration() then
-        migration_scheduled = false
-        migration_armed_by_purge = false
-        migration_running = false
+        finish_run(true)
         return
     end
     if not ensure_required_tags_defined() then
-        migration_scheduled = false
-        migration_running = false
+        finish_run(false)
         return
     end
     if not ensure_shepherd_database_api() then
-        migration_scheduled = false
-        migration_running = false
+        finish_run(false)
         return
     end
     if not migration_armed_by_purge then
         core.log("action", "[" .. mod_name .. "] Migration not armed by purge event, skipping.")
-        migration_scheduled = false
-        migration_running = false
+        finish_run(false)
         return
     end
 
     if not initialize_shepherd_database() then
-        migration_scheduled = false
-        migration_running = false
+        finish_run(false)
         return
     end
     local block_count, label_write_failures, elapsed = migrate_mapblocks()
     finalize_migration(block_count, label_write_failures, elapsed)
-    migration_armed_by_purge = false
-    migration_scheduled = false
-    migration_running = false
+    finish_run(true)
 end
 
 local function schedule_migration(trigger)

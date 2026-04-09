@@ -419,13 +419,27 @@ local function trigger_manual_migration(requester_name, force)
     return true, "Migration scheduled to start now."
 end
 
+local function cleanup_expired_force_confirmations(now)
+    now = now or os.time()
+    for player_name, expires_at in pairs(pending_force_confirmations) do
+        if now > expires_at then
+            pending_force_confirmations[player_name] = nil
+        end
+    end
+end
+
 local function request_force_migration_confirmation(name)
-    pending_force_confirmations[name] = os.time() + force_confirmation_window_seconds
-    return false, "WARNING: This will erase and rebuild all shepherd database labels. Run /shepherd_v4_migrate_confirm within "
-        .. force_confirmation_window_seconds .. " seconds to proceed."
+    local now = os.time()
+    cleanup_expired_force_confirmations(now)
+    pending_force_confirmations[name] = now + force_confirmation_window_seconds
+    return false, string.format(
+        "WARNING: This will erase and rebuild all shepherd database labels. Run /shepherd_v4_migrate_confirm within %d seconds to proceed.",
+        force_confirmation_window_seconds
+    )
 end
 
 local function confirm_force_migration(name)
+    cleanup_expired_force_confirmations()
     local expires_at = pending_force_confirmations[name]
     if not expires_at then
         return false, "No pending force migration request. Run /shepherd_v4_migrate force first."

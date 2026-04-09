@@ -9,7 +9,7 @@ assert(mapchunk_shepherd, string.format(
     mod_name
 ))
 
-local secenv = core.request_insecure_environment()
+local secenv = namespace.secenv
 namespace.secenv = secenv
 local sql_loaded = false
 

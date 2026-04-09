@@ -126,3 +126,17 @@ Position is stored as separate x, y, z columns.
 - Runs incrementally as mapblocks are loaded during gameplay
 - Lower initial load time but slower overall migration
 - Only affects mapblocks that contain matching nodes
+
+## Debugging SQL Migration Labeling
+
+You can enable additional logging to inspect label writes and positions:
+
+```conf
+shepherd_v4_debug_labels = true
+shepherd_v4_debug_log_limit = 30
+```
+
+When enabled, the mod logs:
+- Sampled mapblocks that produced labels (mapblock position, node position, mapchunk hash, labels, matched node names)
+- Sampled mapblocks that produced no labels (with unknown-node count and sampled node names)
+- End-of-migration label summary counters

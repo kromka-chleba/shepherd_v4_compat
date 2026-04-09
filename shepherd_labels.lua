@@ -23,6 +23,18 @@ assert(mapchunk_shepherd, "mapchunk_shepherd mod must be loaded before shepherd_
 local ms = mapchunk_shepherd
 
 local storage = core.get_mod_storage()
+local debug_labels = core.settings:get_bool("shepherd_v4_debug_labels", false)
+local debug_label_log_limit = tonumber(core.settings:get("shepherd_v4_debug_log_limit")) or 30
+if debug_label_log_limit < 0 then
+    debug_label_log_limit = 0
+end
+local debug_logged_labeled_blocks = 0
+local debug_logged_unlabeled_blocks = 0
+local debug_stats = {
+    labeled_blocks = 0,
+    unlabeled_blocks = 0,
+    label_hits = {},
+}
 
 -- Node to label mappings based on shepherd_v3_compat patterns
 -- Multiple labels can be assigned to a position
@@ -52,6 +64,9 @@ local group_to_labels = {
     -- with grass on top, e.g. woodland_soil, grassland_soil). Winter soils and
     -- bare sediments do not have this group.
     ["spreading"] = {"seasonal_plants", "spring_soil"},
+    -- In Exile's seasonal workers, winter soil mapchunks carry winter_soil
+    -- and seasonal_plants labels.
+    ["winter_soil"] = {"seasonal_plants", "winter_soil"},
 }
 
 -- Check if a node belongs to a group
@@ -86,6 +101,60 @@ local function get_labels_for_node(node_name)
     return labels
 end
 
+local function sorted_keys(t)
+    local keys = {}
+    for key, _ in pairs(t) do
+        table.insert(keys, key)
+    end
+    table.sort(keys)
+    return keys
+end
+
+local function format_set(set_like)
+    return table.concat(sorted_keys(set_like), ",")
+end
+
+local function format_label_hits(label_hits)
+    local parts = {}
+    local labels = sorted_keys(label_hits)
+    for _, label in ipairs(labels) do
+        table.insert(parts, label .. "=" .. tostring(label_hits[label]))
+    end
+    return table.concat(parts, ", ")
+end
+
+local function debug_log_labeled_block(pos, node_pos, labels_array, matched_nodes)
+    if not debug_labels or debug_logged_labeled_blocks >= debug_label_log_limit then
+        return
+    end
+    local mapchunk_hash = ms.mapchunk_hash(node_pos)
+    core.log("action", string.format(
+        "[%s][debug] label write #%d mapblock=(%d,%d,%d) node=(%d,%d,%d) mapchunk_hash=%s labels=[%s] matched_nodes=[%s]",
+        mod_name,
+        debug_logged_labeled_blocks + 1,
+        pos.x, pos.y, pos.z,
+        node_pos.x, node_pos.y, node_pos.z,
+        tostring(mapchunk_hash),
+        table.concat(labels_array, ","),
+        format_set(matched_nodes)
+    ))
+    debug_logged_labeled_blocks = debug_logged_labeled_blocks + 1
+end
+
+local function debug_log_unlabeled_block(pos, sampled_nodes, unknown_count)
+    if not debug_labels or debug_logged_unlabeled_blocks >= debug_label_log_limit then
+        return
+    end
+    core.log("action", string.format(
+        "[%s][debug] no labels for mapblock=(%d,%d,%d) unknown_nodes=%d sampled_nodes=[%s]",
+        mod_name,
+        pos.x, pos.y, pos.z,
+        unknown_count,
+        table.concat(sampled_nodes, ",")
+    ))
+    debug_logged_unlabeled_blocks = debug_logged_unlabeled_blocks + 1
+end
+
 local function process_mapblock(block_data)
     local pos = block_data.pos
     local nodes = block_data.nodes
@@ -96,13 +165,25 @@ local function process_mapblock(block_data)
     
     -- Track which labels should be added to the mapchunk containing this mapblock
     local labels_to_add = {}
+    local matched_nodes = {}
+    local sampled_nodes = {}
+    local sampled_nodes_set = {}
+    local unknown_count = 0
     
     -- Scan all nodes in the mapblock
     for _, node_name in ipairs(nodes) do
+        if node_name == "unknown" then
+            unknown_count = unknown_count + 1
+        end
         if node_name ~= "ignore" and node_name ~= "unknown" then
+            if #sampled_nodes < 8 and not sampled_nodes_set[node_name] then
+                table.insert(sampled_nodes, node_name)
+                sampled_nodes_set[node_name] = true
+            end
             local node_labels = get_labels_for_node(node_name)
             for _, label in ipairs(node_labels) do
                 labels_to_add[label] = true
+                matched_nodes[node_name] = true
             end
         end
     end
@@ -114,8 +195,17 @@ local function process_mapblock(block_data)
     end
 
     if #labels_array == 0 then
+        debug_stats.unlabeled_blocks = debug_stats.unlabeled_blocks + 1
+        debug_log_unlabeled_block(pos, sampled_nodes, unknown_count)
         return true
     end
+
+    table.sort(labels_array)
+    debug_stats.labeled_blocks = debug_stats.labeled_blocks + 1
+    for _, label in ipairs(labels_array) do
+        debug_stats.label_hits[label] = (debug_stats.label_hits[label] or 0) + 1
+    end
+    debug_log_labeled_block(pos, node_pos, labels_array, matched_nodes)
 
     local ok, err = pcall(function()
         ms.labels_to_position(node_pos, labels_array)
@@ -204,6 +294,15 @@ local function run_migration()
         core.log("error", string.format(
             "[%s] Migration finished with %d mapblocks that failed to save labels",
             mod_name, label_write_failures
+        ))
+    end
+    if debug_labels then
+        core.log("action", string.format(
+            "[%s][debug] migration label stats: labeled_blocks=%d unlabeled_blocks=%d label_hits={%s}",
+            mod_name,
+            debug_stats.labeled_blocks,
+            debug_stats.unlabeled_blocks,
+            format_label_hits(debug_stats.label_hits)
         ))
     end
     core.chat_send_all(completion_msg)

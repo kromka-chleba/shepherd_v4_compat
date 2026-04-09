@@ -404,7 +404,7 @@ local function trigger_manual_migration(requester_name, force)
 
     if not force and (migration_complete or storage:get_string("migration_complete") == "true") then
         migration_complete = true
-        return false, "Migration is already complete. Use /shepherd_v4_migrate force to run it again."
+        return false, "Migration has already been performed. To run migration manually, use /shepherd_v4_migrate force and then /shepherd_v4_migrate_confirm."
     end
 
     if migration_scheduled then
@@ -489,7 +489,7 @@ core.register_chatcommand("shepherd_v4_migrate", {
         end
         if migration_complete or storage:get_string("migration_complete") == "true" then
             migration_complete = true
-            return true, "Migration is complete. Use /shepherd_v4_migrate force to prepare, then /shepherd_v4_migrate_confirm to execute a forced rerun."
+            return true, "Migration has already been performed. To run migration manually, use /shepherd_v4_migrate force and then /shepherd_v4_migrate_confirm."
         end
         return true, "Manual migration is destructive. Use /shepherd_v4_migrate force to prepare, then /shepherd_v4_migrate_confirm to execute."
     end,

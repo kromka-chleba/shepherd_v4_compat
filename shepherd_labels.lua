@@ -63,7 +63,9 @@ local migration_scheduled = false
 local migration_running = false
 local migration_complete = storage:get_string("migration_complete") == "true"
 local force_confirmation_window_seconds = 30
-local force_confirmation_cleanup_threshold = 32
+-- Avoid scanning the whole pending-confirmation table on every command.
+-- Cleanup runs only after this many pending entries exist.
+local force_confirmation_cleanup_min_count = 32
 local pending_force_confirmations = {}
 local pending_force_confirmation_count = 0
 
@@ -346,6 +348,7 @@ local function run_migration(force)
         return
     end
     migration_running = true
+    -- This callback is executing now, so the migration is no longer merely scheduled.
     migration_scheduled = false
 
     if not force and should_skip_migration() then
@@ -422,7 +425,7 @@ local function trigger_manual_migration(requester_name, force)
 end
 
 local function cleanup_expired_force_confirmations(now)
-    if pending_force_confirmation_count < force_confirmation_cleanup_threshold then
+    if pending_force_confirmation_count < force_confirmation_cleanup_min_count then
         return
     end
     now = now or os.time()
@@ -480,11 +483,11 @@ core.register_chatcommand("shepherd_v4_migrate", {
     description = "Prepare manual shepherd_v4_compat SQL migration (requires force + confirm)",
     privs = { server = true },
     func = function(name, param)
-        local normalized_param = (param or ""):match("^%s*(.-)%s*$")
-        if normalized_param == "force" then
+        local trimmed_param = (param or ""):match("^%s*(.-)%s*$")
+        if trimmed_param == "force" then
             return request_force_migration_confirmation(name)
         end
-        if normalized_param ~= "" then
+        if trimmed_param ~= "" then
             return false, "Invalid parameter. Use /shepherd_v4_migrate force"
         end
         if migration_running then

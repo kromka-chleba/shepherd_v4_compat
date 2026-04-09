@@ -63,6 +63,7 @@ local migration_scheduled = false
 local migration_running = false
 local migration_complete = storage:get_string("migration_complete") == "true"
 local force_confirmation_window_seconds = 30
+local force_confirmation_cleanup_threshold = 32
 local pending_force_confirmations = {}
 local pending_force_confirmation_count = 0
 
@@ -421,7 +422,7 @@ local function trigger_manual_migration(requester_name, force)
 end
 
 local function cleanup_expired_force_confirmations(now)
-    if pending_force_confirmation_count < 32 then
+    if pending_force_confirmation_count < force_confirmation_cleanup_threshold then
         return
     end
     now = now or os.time()
@@ -486,7 +487,17 @@ core.register_chatcommand("shepherd_v4_migrate", {
         if normalized_param ~= "" then
             return false, "Invalid parameter. Use /shepherd_v4_migrate force"
         end
-        return false, "Manual migration is destructive. Use /shepherd_v4_migrate force to prepare, then /shepherd_v4_migrate_confirm to execute."
+        if migration_running then
+            return true, "Migration is currently running."
+        end
+        if migration_scheduled then
+            return true, "Migration is currently scheduled."
+        end
+        if migration_complete or storage:get_string("migration_complete") == "true" then
+            migration_complete = true
+            return true, "Migration is complete. Use /shepherd_v4_migrate force to prepare, then /shepherd_v4_migrate_confirm to execute a forced rerun."
+        end
+        return true, "Manual migration is destructive. Use /shepherd_v4_migrate force to prepare, then /shepherd_v4_migrate_confirm to execute."
     end,
 })
 

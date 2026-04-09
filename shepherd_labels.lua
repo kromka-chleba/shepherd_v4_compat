@@ -12,17 +12,25 @@ if not secenv then
     return false
 end
 
-local sql_map_reader = assert(
-    dofile(core.get_modpath(mod_name) .. "/sql_map_reader.lua"),
-    "[" .. mod_name .. "] Failed to load sql_map_reader.lua"
+local function load_required_module(path, file_name)
+    local loaded = dofile(path)
+    if not loaded then
+        error("[" .. mod_name .. "] Failed to load " .. file_name)
+    end
+    return loaded
+end
+
+local sql_map_reader = load_required_module(
+    core.get_modpath(mod_name) .. "/sql_map_reader.lua",
+    "sql_map_reader.lua"
 )
-local migration_debug = assert(
-    dofile(core.get_modpath(mod_name) .. "/migration_debug.lua"),
-    "[" .. mod_name .. "] Failed to load migration_debug.lua"
+local migration_debug = load_required_module(
+    core.get_modpath(mod_name) .. "/migration_debug.lua",
+    "migration_debug.lua"
 )
-local shepherd_migration = assert(
-    dofile(core.get_modpath(mod_name) .. "/shepherd_migration.lua"),
-    "[" .. mod_name .. "] Failed to load shepherd_migration.lua"
+local shepherd_migration = load_required_module(
+    core.get_modpath(mod_name) .. "/shepherd_migration.lua",
+    "shepherd_migration.lua"
 )
 
 assert(mapchunk_shepherd, "mapchunk_shepherd mod must be loaded before shepherd_v4_compat")

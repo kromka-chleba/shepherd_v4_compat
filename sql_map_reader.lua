@@ -177,17 +177,16 @@ function sql_map_reader.iterate_blocks(callback)
         -- Old schema (pre-5.12.0): SELECT pos,data FROM blocks
         for row in db:nrows("SELECT pos,data FROM blocks") do
             local block_pos = decode_pos_hash(row.pos)
-            if not block_pos then
+            if block_pos then
+                local block_data = sql_map_reader.decode_mapblock(row.data, block_pos)
+                callback(block_data)
+                count = count + 1
+            else
                 core.log("warning", string.format(
                     "[shepherd_v4_compat] Skipping block row with invalid pos value: %s",
                     tostring(row.pos)
                 ))
-                goto continue_old_block_row
             end
-            local block_data = sql_map_reader.decode_mapblock(row.data, block_pos)
-            callback(block_data)
-            count = count + 1
-            ::continue_old_block_row::
         end
     end
     

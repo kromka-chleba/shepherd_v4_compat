@@ -7,10 +7,56 @@ local mod_path = core.get_modpath(mod_name)
 
 core.log("action", "[" .. mod_name .. "] Loading shepherd v4 compatibility...")
 
+assert(mapchunk_shepherd, "mapchunk_shepherd mod must be loaded before shepherd_v4_compat")
+local ms = mapchunk_shepherd
+
+-- Tags used by this compatibility module for mapchunk labels.
+local compat_tags = {
+    "ocean",
+    "last_freezed",
+    "last_snow",
+    "water_gravity",
+    "moisture_spread",
+    "leaves",
+    "leaves_dropped",
+    "spring_soil",
+    "seasonal_plants",
+    "winter_soil",
+}
+
+-- Register all compatibility tags before any label writes happen.
+local function ensure_compat_tags_registered()
+    if not (ms.tag and ms.tag.check and ms.tag.register) then
+        core.log("error", "[" .. mod_name .. "] mapchunk_shepherd tag API is unavailable")
+        return false
+    end
+
+    local registered = 0
+    for _, tag in ipairs(compat_tags) do
+        if not ms.tag.check(tag) then
+            ms.tag.register(tag)
+            registered = registered + 1
+        end
+    end
+
+    core.log("action", string.format(
+        "[%s] Verified compatibility tag registrations (%d newly registered)",
+        mod_name, registered
+    ))
+    return true
+end
+
+shepherd_v4_compat = shepherd_v4_compat or {}
+shepherd_v4_compat.ensure_compat_tags_registered = ensure_compat_tags_registered
+shepherd_v4_compat.compat_tags = compat_tags
+
+if not ensure_compat_tags_registered() then
+    core.log("error", "[" .. mod_name .. "] Failed to register compatibility tags")
+end
+
 -- Try to use insecure environment for SQL-based compatibility first
 -- Note: core.request_insecure_environment() MUST be called only from init.lua
 local secenv = core.request_insecure_environment()
-shepherd_v4_compat = shepherd_v4_compat or {}
 shepherd_v4_compat.secenv = secenv  -- Store for use by submodules (dofile'd files)
 local sql_loaded = false
 

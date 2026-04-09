@@ -35,6 +35,8 @@ The mod follows this data flow:
    - Mapblock position (x, y, z) → Node position (x×16, y×16, z×16)
 
 3. **Label Assignment** (`shepherd_labels.lua`): 
+   - Registers all compatibility tags with mapchunk_shepherd (if missing)
+   - Purges and re-initializes the shepherd database before relabeling begins
    - Maps specific nodes to shepherd labels (e.g., `nodes_nature:salt_water_source` → `ocean` label)
    - Checks node groups (e.g., `group:wet_sediment` → `moisture_spread` label)
    - Detects seasonal soil patterns (e.g., nodes with `_spring` → `spring_soil` and `seasonal_plants` labels)
@@ -124,4 +126,3 @@ Position is stored as separate x, y, z columns.
 - Runs incrementally as mapblocks are loaded during gameplay
 - Lower initial load time but slower overall migration
 - Only affects mapblocks that contain matching nodes
-

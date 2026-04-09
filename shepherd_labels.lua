@@ -131,6 +131,16 @@ local function run_migration()
         return
     end
 
+    if shepherd_v4_compat and shepherd_v4_compat.ensure_compat_tags_registered then
+        shepherd_v4_compat.ensure_compat_tags_registered()
+    end
+
+    assert(ms.database and ms.database.purge and ms.database.initialize,
+        "mapchunk_shepherd database API is not available")
+    core.log("action", "[" .. mod_name .. "] Purging shepherd database before migration relabeling...")
+    ms.database.purge()
+    ms.database.initialize()
+
     core.log("action", "[" .. mod_name .. "] Starting mapblock label migration...")
     
     -- Send initial message to all connected players

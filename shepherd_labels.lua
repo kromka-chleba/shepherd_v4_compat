@@ -378,6 +378,30 @@ local function schedule_migration(trigger)
     core.after(migration_defer_seconds, run_migration)
 end
 
+local function trigger_manual_migration(requester_name)
+    if migration_running then
+        return false, "Migration is already running."
+    end
+
+    if migration_complete or storage:get_string("migration_complete") == "true" then
+        migration_complete = true
+        return false, "Migration is already complete."
+    end
+
+    if migration_scheduled then
+        return false, "Migration is already scheduled."
+    end
+
+    migration_scheduled = true
+    core.log("action", string.format(
+        "[%s] Manual migration requested by %s",
+        mod_name,
+        requester_name or "<unknown>"
+    ))
+    core.after(0, run_migration)
+    return true, "Migration scheduled to start now."
+end
+
 -- Execute migration after all mods are loaded (deferred to avoid startup ordering races)
 core.register_on_mods_loaded(function()
     schedule_migration("on_mods_loaded")
@@ -389,6 +413,15 @@ core.register_on_joinplayer(function()
         schedule_migration("on_joinplayer")
     end
 end)
+
+core.register_chatcommand("shepherd_v4_migrate", {
+    params = "",
+    description = "Run shepherd_v4_compat SQL map migration now",
+    privs = { server = true },
+    func = function(name)
+        return trigger_manual_migration(name)
+    end,
+})
 
 -- Return true to indicate successful loading
 return true

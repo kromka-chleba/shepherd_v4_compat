@@ -17,6 +17,11 @@ if not sql_map_reader then
     core.log("error", "[" .. mod_name .. "] Failed to load sql_map_reader.lua")
     return false
 end
+local shepherd_debug = dofile(core.get_modpath(mod_name) .. "/shepherd_debug.lua")
+if not shepherd_debug then
+    core.log("error", "[" .. mod_name .. "] Failed to load shepherd_debug.lua")
+    return false
+end
 
 mapchunk_shepherd = mapchunk_shepherd  -- Ensure global is loaded before accessing
 assert(mapchunk_shepherd, "mapchunk_shepherd mod must be loaded before shepherd_v4_compat")
@@ -47,13 +52,13 @@ if migration_defer_seconds < 0 then
     migration_defer_seconds = 0
 end
 local max_sampled_nodes_per_block = 8
-local debug_logged_labeled_blocks = 0
-local debug_logged_unlabeled_blocks = 0
-local debug_stats = {
-    labeled_blocks = 0,
-    unlabeled_blocks = 0,
-    label_hits = {},
-}
+local debug_ctx = shepherd_debug.new({
+    core = core,
+    mod_name = mod_name,
+    ms = ms,
+    enabled = debug_labels,
+    log_limit = debug_label_log_limit,
+})
 local migration_scheduled = false
 local migration_running = false
 local migration_complete = storage:get_string("migration_complete") == "true"
@@ -163,60 +168,6 @@ local function get_labels_for_node(node_name)
     return labels
 end
 
-local function sorted_keys(t)
-    local keys = {}
-    for key, _ in pairs(t) do
-        table.insert(keys, key)
-    end
-    table.sort(keys)
-    return keys
-end
-
-local function format_set(set_like)
-    return table.concat(sorted_keys(set_like), ",")
-end
-
-local function format_label_hits(label_hits)
-    local parts = {}
-    local labels = sorted_keys(label_hits)
-    for _, label in ipairs(labels) do
-        table.insert(parts, label .. "=" .. tostring(label_hits[label]))
-    end
-    return table.concat(parts, ", ")
-end
-
-local function debug_log_labeled_block(pos, node_pos, labels_array, matched_nodes)
-    if not debug_labels or debug_logged_labeled_blocks >= debug_label_log_limit then
-        return
-    end
-    local mapchunk_hash = ms.mapchunk_hash(node_pos)
-    core.log("action", string.format(
-        "[%s][debug] label write #%d mapblock=(%d,%d,%d) node=(%d,%d,%d) mapchunk_hash=%s labels=[%s] matched_nodes=[%s]",
-        mod_name,
-        debug_logged_labeled_blocks + 1,
-        pos.x, pos.y, pos.z,
-        node_pos.x, node_pos.y, node_pos.z,
-        tostring(mapchunk_hash),
-        table.concat(labels_array, ","),
-        format_set(matched_nodes)
-    ))
-    debug_logged_labeled_blocks = debug_logged_labeled_blocks + 1
-end
-
-local function debug_log_unlabeled_block(pos, sampled_nodes, unknown_count)
-    if not debug_labels or debug_logged_unlabeled_blocks >= debug_label_log_limit then
-        return
-    end
-    core.log("action", string.format(
-        "[%s][debug] no labels for mapblock=(%d,%d,%d) unknown_nodes=%d sampled_nodes=[%s]",
-        mod_name,
-        pos.x, pos.y, pos.z,
-        unknown_count,
-        table.concat(sampled_nodes, ",")
-    ))
-    debug_logged_unlabeled_blocks = debug_logged_unlabeled_blocks + 1
-end
-
 local collect_labels_for_mapblock_nodes
 
 local function process_mapblock(block_data)
@@ -229,16 +180,11 @@ local function process_mapblock(block_data)
 
     local labels_array, matched_nodes, sampled_nodes, unknown_count = collect_labels_for_mapblock_nodes(nodes)
     if #labels_array == 0 then
-        debug_stats.unlabeled_blocks = debug_stats.unlabeled_blocks + 1
-        debug_log_unlabeled_block(pos, sampled_nodes, unknown_count)
+        debug_ctx.record_unlabeled(pos, sampled_nodes, unknown_count)
         return true
     end
 
-    debug_stats.labeled_blocks = debug_stats.labeled_blocks + 1
-    for _, label in ipairs(labels_array) do
-        debug_stats.label_hits[label] = (debug_stats.label_hits[label] or 0) + 1
-    end
-    debug_log_labeled_block(pos, node_pos, labels_array, matched_nodes)
+    debug_ctx.record_labeled(pos, node_pos, labels_array, matched_nodes)
 
     local ok, err = pcall(ms.labels_to_position, node_pos, labels_array)
     if not ok then
@@ -375,13 +321,13 @@ local function finalize_migration(block_count, label_write_failures, elapsed)
             mod_name, label_write_failures
         ))
     end
-    if debug_labels then
+    if debug_ctx.is_enabled then
         core.log("action", string.format(
             "[%s][debug] migration label stats: labeled_blocks=%d unlabeled_blocks=%d label_hits={%s}",
             mod_name,
-            debug_stats.labeled_blocks,
-            debug_stats.unlabeled_blocks,
-            format_label_hits(debug_stats.label_hits)
+            debug_ctx.stats.labeled_blocks,
+            debug_ctx.stats.unlabeled_blocks,
+            debug_ctx.format_label_hits(debug_ctx.stats.label_hits)
         ))
     end
     core.chat_send_all(completion_msg)

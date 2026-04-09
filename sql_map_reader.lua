@@ -79,7 +79,7 @@ local function decode_pos_hash(hash)
         local y = bit.rshift(hash, 12)
         y = bit.band(y, 0xFFF) - 0x800
         local z = bit.rshift(hash, 24)
-        z = bit.band(z, 0xFF) - 0x800
+        z = bit.band(z, 0xFFF) - 0x800
         return { x = x, y = y, z = z}
 end
 

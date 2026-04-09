@@ -23,14 +23,6 @@ assert(mapchunk_shepherd, "mapchunk_shepherd mod must be loaded before shepherd_
 local ms = mapchunk_shepherd
 
 local storage = core.get_mod_storage()
-local label_setter_mode = nil
-local label_setter_mode_logged = false
-
-local function is_fallback_available()
-    return ms.label_store
-        and type(ms.label_store.new) == "function"
-        and type(ms.mapchunk_hash) == "function"
-end
 
 -- Node to label mappings based on shepherd_v3_compat patterns
 -- Multiple labels can be assigned to a position
@@ -94,85 +86,6 @@ local function get_labels_for_node(node_name)
     return labels
 end
 
--- Process a single mapblock and assign labels
--- Converts mapblock position to node position, then labels the containing mapchunk
-local function set_labels_with_fallback(pos, labels)
-    if type(labels) ~= "table" then
-        core.log("error", string.format(
-            "[%s] Label write aborted: expected labels table, got %s",
-            mod_name, type(labels)
-        ))
-        return false
-    end
-
-    if #labels == 0 then
-        return true
-    end
-
-    if not label_setter_mode then
-        -- Mode meanings:
-        -- shepherd_api: use ms.labels_to_position()
-        -- label_store_fallback: write labels via label_store directly
-        -- unavailable: neither write path is usable
-        if type(ms.labels_to_position) == "function" then
-            label_setter_mode = "shepherd_api"
-        elseif is_fallback_available() then
-            label_setter_mode = "label_store_fallback"
-        else
-            label_setter_mode = "unavailable"
-        end
-    end
-
-    if not label_setter_mode_logged then
-        core.log("action", string.format(
-            "[%s] Label setter mode: %s",
-            mod_name, label_setter_mode
-        ))
-        label_setter_mode_logged = true
-    end
-
-    if label_setter_mode == "shepherd_api" then
-        local ok, err = pcall(function()
-            ms.labels_to_position(pos, labels)
-        end)
-        if ok then
-            return true
-        end
-        core.log("error", string.format(
-            "[%s] labels_to_position() failed: %s",
-            mod_name, tostring(err)
-        ))
-        -- If the primary API fails once, switch mode for subsequent writes.
-        if is_fallback_available() then
-            core.log("warning", "[" .. mod_name .. "] Falling back to direct label_store writes")
-            label_setter_mode = "label_store_fallback"
-        else
-            label_setter_mode = "unavailable"
-        end
-    end
-
-    if label_setter_mode == "label_store_fallback" then
-        -- Fallback writes labels directly via label_store for the mapchunk hash.
-        -- This bypasses labels_to_position() when that API fails unexpectedly.
-        local ok, err = pcall(function()
-            local hash = ms.mapchunk_hash(pos)
-            local ls = ms.label_store.new(hash)
-            ls:add_labels(labels)
-            ls:save_to_disk()
-        end)
-        if ok then
-            return true
-        end
-        core.log("error", string.format(
-            "[%s] label_store fallback failed: %s",
-            mod_name, tostring(err)
-        ))
-        label_setter_mode = "unavailable"
-    end
-
-    return false
-end
-
 local function process_mapblock(block_data)
     local pos = block_data.pos
     local nodes = block_data.nodes
@@ -199,8 +112,21 @@ local function process_mapblock(block_data)
     for label, _ in pairs(labels_to_add) do
         table.insert(labels_array, label)
     end
-    
-    return set_labels_with_fallback(node_pos, labels_array)
+
+    if #labels_array == 0 then
+        return true
+    end
+
+    local ok, err = pcall(function()
+        ms.labels_to_position(node_pos, labels_array)
+    end)
+    if not ok then
+        core.log("error", string.format(
+            "[%s] labels_to_position() failed at mapblock (%d,%d,%d): %s",
+            mod_name, pos.x, pos.y, pos.z, tostring(err)
+        ))
+    end
+    return ok
 end
 
 -- Run the migration

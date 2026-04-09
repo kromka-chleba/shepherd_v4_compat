@@ -217,14 +217,40 @@ local function debug_log_unlabeled_block(pos, sampled_nodes, unknown_count)
     debug_logged_unlabeled_blocks = debug_logged_unlabeled_blocks + 1
 end
 
+local collect_labels_for_mapblock_nodes
+
 local function process_mapblock(block_data)
     local pos = block_data.pos
     local nodes = block_data.nodes
-    
+
     -- Convert mapblock position to node position (multiply by 16)
     -- The shepherd API accepts node positions and labels the containing mapchunk
     local node_pos = vector.new(pos.x * 16, pos.y * 16, pos.z * 16)
-    
+
+    local labels_array, matched_nodes, sampled_nodes, unknown_count = collect_labels_for_mapblock_nodes(nodes)
+    if #labels_array == 0 then
+        debug_stats.unlabeled_blocks = debug_stats.unlabeled_blocks + 1
+        debug_log_unlabeled_block(pos, sampled_nodes, unknown_count)
+        return true
+    end
+
+    debug_stats.labeled_blocks = debug_stats.labeled_blocks + 1
+    for _, label in ipairs(labels_array) do
+        debug_stats.label_hits[label] = (debug_stats.label_hits[label] or 0) + 1
+    end
+    debug_log_labeled_block(pos, node_pos, labels_array, matched_nodes)
+
+    local ok, err = pcall(ms.labels_to_position, node_pos, labels_array)
+    if not ok then
+        core.log("error", string.format(
+            "[%s] labels_to_position() failed at mapblock (%d,%d,%d): %s",
+            mod_name, pos.x, pos.y, pos.z, tostring(err)
+        ))
+    end
+    return ok
+end
+
+collect_labels_for_mapblock_nodes = function(nodes)
     -- Track which labels should be added to the mapchunk containing this mapblock
     local labels_to_add = {}
     local matched_nodes = {}
@@ -236,7 +262,7 @@ local function process_mapblock(block_data)
     for _, node_name in ipairs(nodes) do
         if node_name == "unknown" then
             unknown_count = unknown_count + 1
-        end
+end
         if node_name ~= "ignore" and node_name ~= "unknown" then
             if #sampled_nodes < max_sampled_nodes_per_block and not sampled_nodes_set[node_name] then
                 table.insert(sampled_nodes, node_name)
@@ -255,28 +281,8 @@ local function process_mapblock(block_data)
     for label, _ in pairs(labels_to_add) do
         table.insert(labels_array, label)
     end
-
-    if #labels_array == 0 then
-        debug_stats.unlabeled_blocks = debug_stats.unlabeled_blocks + 1
-        debug_log_unlabeled_block(pos, sampled_nodes, unknown_count)
-        return true
-    end
-
     table.sort(labels_array)
-    debug_stats.labeled_blocks = debug_stats.labeled_blocks + 1
-    for _, label in ipairs(labels_array) do
-        debug_stats.label_hits[label] = (debug_stats.label_hits[label] or 0) + 1
-    end
-    debug_log_labeled_block(pos, node_pos, labels_array, matched_nodes)
-
-    local ok, err = pcall(ms.labels_to_position, node_pos, labels_array)
-    if not ok then
-        core.log("error", string.format(
-            "[%s] labels_to_position() failed at mapblock (%d,%d,%d): %s",
-            mod_name, pos.x, pos.y, pos.z, tostring(err)
-        ))
-    end
-    return ok
+    return labels_array, matched_nodes, sampled_nodes, unknown_count
 end
 
 -- Run the migration

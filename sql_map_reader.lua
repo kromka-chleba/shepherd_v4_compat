@@ -95,10 +95,8 @@ local function decode_pos_hash(hash)
         }
 end
 
--- Decode a mapblock and return node data
-function sql_map_reader.decode_mapblock(block_data, block_pos)
-    local version = string.byte(block_data, 1)
-
+-- Read map nodes for a mapblock position and return node data
+function sql_map_reader.read_mapblock_nodes(block_pos)
     local minp = vector.new(block_pos.x * 16, block_pos.y * 16, block_pos.z * 16)
     local maxp = vector.new(minp.x + 15, minp.y + 15, minp.z + 15)
 
@@ -107,7 +105,6 @@ function sql_map_reader.decode_mapblock(block_data, block_pos)
     if not emin or not emax then
         return {
             pos = block_pos,
-            version = version,
             nodes = {},
             id_name_table = {}
         }
@@ -139,37 +136,31 @@ function sql_map_reader.decode_mapblock(block_data, block_pos)
 
     return {
         pos = block_pos,
-        version = version,
         nodes = nodes,
         id_name_table = id_name_table
     }
 end
 
--- Iterate through all blocks and call a callback for each
-function sql_map_reader.iterate_blocks(callback)
+-- Iterate through mapblock positions stored in map.sqlite and call a callback for each
+function sql_map_reader.iterate_block_positions(callback)
     if not db then
         core.log("error", "[shepherd_v4_compat] Database not available")
         return
     end
-    
+
     local schema = detect_schema()
     core.log("action", string.format("[shepherd_v4_compat] Detected map.sqlite schema: %s (%s format)",
         schema, schema == "new" and "5.12.0+" or "pre-5.12.0"))
-    
-    local count = 0
-    local start = os.clock()
-    
+
     if schema == "new" then
-        -- New schema (5.12.0+): SELECT x,y,z,data FROM blocks
-        for row in db:nrows("SELECT x,y,z,data FROM blocks") do
+        -- New schema (5.12.0+): SELECT x,y,z FROM blocks
+        for row in db:nrows("SELECT x,y,z FROM blocks") do
             local block_pos = { x = row.x, y = row.y, z = row.z }
-            local block_data = sql_map_reader.decode_mapblock(row.data, block_pos)
-            callback(block_data)
-            count = count + 1
+            callback(block_pos)
         end
     else
-        -- Old schema (pre-5.12.0): SELECT pos,data FROM blocks
-        for row in db:nrows("SELECT pos,data FROM blocks") do
+        -- Old schema (pre-5.12.0): SELECT pos FROM blocks
+        for row in db:nrows("SELECT pos FROM blocks") do
             local block_pos = decode_pos_hash(row.pos)
             if not block_pos then
                 core.log("warning", string.format(
@@ -178,13 +169,23 @@ function sql_map_reader.iterate_blocks(callback)
                 ))
                 goto continue_old_block_row
             end
-            local block_data = sql_map_reader.decode_mapblock(row.data, block_pos)
-            callback(block_data)
-            count = count + 1
+            callback(block_pos)
             ::continue_old_block_row::
         end
     end
-    
+end
+
+-- Iterate through all blocks, read their nodes, and call a callback for each
+function sql_map_reader.iterate_blocks(callback)
+    local count = 0
+    local start = os.clock()
+
+    sql_map_reader.iterate_block_positions(function(block_pos)
+        local block_data = sql_map_reader.read_mapblock_nodes(block_pos)
+        callback(block_data)
+        count = count + 1
+    end)
+
     local elapsed = os.clock() - start
     core.log("action", string.format(
         "[shepherd_v4_compat] Processed %d mapblocks in %.2f seconds",

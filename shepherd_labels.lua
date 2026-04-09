@@ -62,6 +62,9 @@ local debug_ctx = migration_debug.new({
 local migration_scheduled = false
 local migration_running = false
 local migration_complete = storage:get_string("migration_complete") == "true"
+local migration_armed_by_purge = false
+local pending_migration_purge_seq = nil
+local last_handled_migration_purge_seq = storage:get_int("last_handled_migration_purge_seq")
 
 -- Node to label mappings based on shepherd_v3_compat patterns
 -- Multiple labels can be assigned to a position
@@ -250,12 +253,15 @@ local function ensure_required_tags_defined()
     return true
 end
 
+-- Guard migration entry points behind the shepherd DB API required by this module.
 local function ensure_shepherd_database_api()
     if not (ms.database
-        and type(ms.database.purge) == "function"
-        and type(ms.database.initialize) == "function") then
+        and type(ms.database.purge_for_migration) == "function"
+        and type(ms.database.register_on_purged) == "function"
+        and type(ms.database.initialize) == "function"
+        and type(ms.database.get_purge_state) == "function") then
         core.log("error", string.format(
-            "[%s] Migration aborted: shepherd database API must provide callable purge() and initialize() methods",
+            "[%s] Migration aborted: shepherd database API must provide callable purge_for_migration(), register_on_purged(), initialize(), and get_purge_state() methods",
             mod_name
         ))
         return false
@@ -263,10 +269,44 @@ local function ensure_shepherd_database_api()
     return true
 end
 
-local function reset_shepherd_database()
-    core.log("action", "[" .. mod_name .. "] Purging shepherd database before migration relabeling...")
-    ms.database.purge()
-    ms.database.initialize()
+local function initialize_shepherd_database()
+    local init_ok, init_err = pcall(ms.database.initialize)
+    if not init_ok then
+        core.log("error", string.format(
+            "[%s] Migration aborted: initialize() failed after purge: %s",
+            mod_name, tostring(init_err)
+        ))
+        return false
+    end
+
+    return true
+end
+
+local function is_migration_purge_event(event_data)
+    return type(event_data) == "table"
+        and event_data.event == "database_purged"
+        and event_data.reason == "migration"
+end
+
+-- Normalize purge sequence values to a positive integer for durable deduplication.
+local function parse_purge_seq(raw_seq)
+    local seq = tonumber(raw_seq)
+    if not seq then
+        return nil
+    end
+    seq = math.floor(seq)
+    if seq <= 0 then
+        return nil
+    end
+    return seq
+end
+
+-- Accept only strictly newer migration purge sequence numbers.
+local function can_consume_migration_purge_seq(purge_seq)
+    if not purge_seq then
+        return false
+    end
+    return purge_seq > last_handled_migration_purge_seq
 end
 
 local function migrate_mapblocks()
@@ -333,34 +373,56 @@ local function finalize_migration(block_count, label_write_failures, elapsed)
     core.chat_send_all(completion_msg)
     storage:set_string("migration_complete", "true")
     migration_complete = true
+    if pending_migration_purge_seq and pending_migration_purge_seq > last_handled_migration_purge_seq then
+        last_handled_migration_purge_seq = pending_migration_purge_seq
+        storage:set_int("last_handled_migration_purge_seq", last_handled_migration_purge_seq)
+    end
 end
 
--- Run the migration
+-- Execute the migration only when preconditions are satisfied and purge-armed.
 local function run_migration()
+    local function finish_run(clear_purge_arm)
+        migration_scheduled = false
+        if clear_purge_arm then
+            migration_armed_by_purge = false
+            pending_migration_purge_seq = nil
+        end
+        migration_running = false
+    end
+
     if migration_running then
         return
     end
     migration_running = true
 
     if should_skip_migration() then
-        migration_running = false
+        finish_run(true)
         return
     end
     if not ensure_required_tags_defined() then
-        migration_running = false
+        finish_run(false)
         return
     end
     if not ensure_shepherd_database_api() then
-        migration_running = false
+        finish_run(false)
+        return
+    end
+    if not migration_armed_by_purge then
+        core.log("action", "[" .. mod_name .. "] Migration not armed by purge event, skipping.")
+        finish_run(false)
         return
     end
 
-    reset_shepherd_database()
+    if not initialize_shepherd_database() then
+        finish_run(false)
+        return
+    end
     local block_count, label_write_failures, elapsed = migrate_mapblocks()
     finalize_migration(block_count, label_write_failures, elapsed)
-    migration_running = false
+    finish_run(true)
 end
 
+-- Debounce migration scheduling after a confirmed migration purge signal.
 local function schedule_migration(trigger)
     if migration_complete then
         return
@@ -378,9 +440,65 @@ local function schedule_migration(trigger)
     core.after(migration_defer_seconds, run_migration)
 end
 
-local function trigger_manual_migration(requester_name)
+-- Handle live purge callbacks and arm migration for valid migration purge events.
+local function handle_database_purged(event_data)
+    if not is_migration_purge_event(event_data) then
+        return
+    end
+    if migration_complete then
+        return
+    end
+    local purge_seq = parse_purge_seq(event_data.purge_seq)
+    if not can_consume_migration_purge_seq(purge_seq) then
+        return
+    end
+    migration_armed_by_purge = true
+    pending_migration_purge_seq = purge_seq
+    schedule_migration("database_purged:migration")
+end
+
+-- Reconcile startup state using durable shepherd purge state (missed-callback safe).
+local function reconcile_with_shepherd_purge_state()
+    if migration_complete then
+        return
+    end
+    local ok, purge_state = pcall(ms.database.get_purge_state)
+    if not ok then
+        core.log("warning", string.format(
+            "[%s] Failed to query shepherd purge state: %s",
+            mod_name, tostring(purge_state)
+        ))
+        return
+    end
+    if type(purge_state) ~= "table" then
+        return
+    end
+    local seq = parse_purge_seq(purge_state.seq)
+    if not can_consume_migration_purge_seq(seq) then
+        return
+    end
+    if purge_state.reason ~= "migration" then
+        return
+    end
+
+    local event_data = {
+        event = "database_purged",
+        reason = "migration",
+        purge_seq = seq,
+    }
+    if type(purge_state.event) == "table" then
+        for key, value in pairs(purge_state.event) do
+            event_data[key] = value
+        end
+    end
+    event_data.purge_seq = parse_purge_seq(event_data.purge_seq) or seq
+    handle_database_purged(event_data)
+end
+
+-- Chat command helper: request migration purge and wait for callback-driven migration.
+local function request_manual_migration_purge(requester_name)
     if migration_running then
-        return false, "Migration is already running."
+        return false, "Migration is already running; purge request denied."
     end
 
     if migration_complete or storage:get_string("migration_complete") == "true" then
@@ -388,38 +506,38 @@ local function trigger_manual_migration(requester_name)
         return false, "Migration is already complete."
     end
 
-    if migration_scheduled then
-        return false, "Migration is already scheduled."
+    if not ensure_shepherd_database_api() then
+        return false, "Shepherd database API is missing required methods (purge_for_migration, register_on_purged, initialize, or get_purge_state)."
     end
 
-    migration_scheduled = true
+    local ok, err = pcall(ms.database.purge_for_migration)
+    if not ok then
+        return false, "Failed to request shepherd migration purge: " .. tostring(err)
+    end
+
     core.log("action", string.format(
-        "[%s] Manual migration requested by %s",
+        "[%s] Manual migration purge requested by %s",
         mod_name,
         requester_name or "<unknown>"
     ))
-    core.after(0, run_migration)
-    return true, "Migration scheduled to start now."
+    return true, "Migration purge requested; migration will run after purge callback."
 end
 
--- Execute migration after all mods are loaded (deferred to avoid startup ordering races)
 core.register_on_mods_loaded(function()
-    schedule_migration("on_mods_loaded")
-end)
-
--- Safety fallback: if startup callback timing differs, trigger on first join
-core.register_on_joinplayer(function()
-    if not migration_complete then
-        schedule_migration("on_joinplayer")
+    if not ensure_shepherd_database_api() then
+        return
     end
+
+    ms.database.register_on_purged(handle_database_purged)
+    reconcile_with_shepherd_purge_state()
 end)
 
 core.register_chatcommand("shepherd_v4_migrate", {
     params = "",
-    description = "Run shepherd_v4_compat SQL map migration now",
+    description = "Request shepherd purge for shepherd_v4_compat SQL migration",
     privs = { server = true },
     func = function(name)
-        return trigger_manual_migration(name)
+        return request_manual_migration_purge(name)
     end,
 })
 

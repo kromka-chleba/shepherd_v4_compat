@@ -85,68 +85,48 @@ end
 
 -- Decode a mapblock and return node data
 function sql_map_reader.decode_mapblock(block_data, block_pos)
-    local cursor = 1
-    local data = block_data
-    
-    local function u8()
-        local char = string.sub(data, cursor, cursor)
-        local out = string.byte(char)
-        cursor = cursor + 1
-        return out
-    end
-    
-    local function u16()
-        return bit.lshift(u8(), 8) + u8()
-    end
-    
-    local function u32()
-        return bit.lshift(u16(), 16) + u16()
+    local version = string.byte(block_data, 1)
+
+    local minp = vector.new(block_pos.x * 16, block_pos.y * 16, block_pos.z * 16)
+    local maxp = vector.new(minp.x + 15, minp.y + 15, minp.z + 15)
+
+    local vm = core.get_voxel_manip()
+    local emin, emax = vm:read_from_map(minp, maxp)
+    if not emin or not emax then
+        return {
+            pos = block_pos,
+            version = version,
+            nodes = {},
+            id_name_table = {}
+        }
     end
 
-    local version = u8()
-
-    if version >= 29 then -- Data is now serialized and compressed
-        data = core.decompress(string.sub(data, 2, #data), "zstd")
-        cursor = 1 -- reset cursor
-    end
-
-    local flags = u8()
-    local lighting_complete
-    if version >= 27 then
-        lighting_complete = u16()
-    end
-
-    local timestamp, node_id_mapping_version
-    if version >= 29 then
-        timestamp = u32()
-        node_id_mapping_version = u8()
-    end
-
-    local num_id_name_mappings = u16()
-    local id_name_table = {}
-
-    for i = 1, num_id_name_mappings do
-        local id = u16()
-        local name_len = u16()
-        if name_len > 256 then
-            error("Invalid node name length: " .. name_len)
-        end
-        local name = string.sub(data, cursor, cursor + name_len - 1)
-        cursor = cursor + name_len
-        id_name_table[tonumber(id)] = name
-    end
-
-    -- Content width is always 2 bytes per node
-    local content_width = 2
-    
-    -- Read node data (4096 nodes in a 16x16x16 mapblock)
+    local area = VoxelArea:new({MinEdge = emin, MaxEdge = emax})
+    local voxel_data = vm:get_data()
     local nodes = {}
-    for i = 1, 4096 do
-        local node_id = u16()
-        local node_name = id_name_table[node_id] or "unknown"
-        table.insert(nodes, node_name)
+    local id_name_table = {}
+    local cid_to_local_id = {}
+    local next_local_id = 0
+
+    for z = minp.z, maxp.z do
+        for y = minp.y, maxp.y do
+            for x = minp.x, maxp.x do
+                local vi = area:index(x, y, z)
+                local cid = voxel_data[vi]
+                local node_name = core.get_name_from_content_id(cid) or "unknown"
+                nodes[#nodes + 1] = node_name
+
+                local local_id = cid_to_local_id[cid]
+                if local_id == nil then
+                    local_id = next_local_id
+                    next_local_id = next_local_id + 1
+                    cid_to_local_id[cid] = local_id
+                    id_name_table[local_id] = node_name
+                end
+            end
+        end
     end
-    
+
     return {
         pos = block_pos,
         version = version,

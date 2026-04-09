@@ -358,8 +358,8 @@ local function run_migration()
     migration_running = true
 
     if should_skip_migration() then
-        migration_armed_by_purge = false
         migration_scheduled = false
+        migration_armed_by_purge = false
         migration_running = false
         return
     end
@@ -434,9 +434,9 @@ local function request_manual_migration_purge(requester_name)
         return false, "Shepherd database API is missing required methods (purge_for_migration, register_on_purged, or initialize)."
     end
 
-    local ok, err_or_event = pcall(ms.database.purge_for_migration)
+    local ok, err = pcall(ms.database.purge_for_migration)
     if not ok then
-        return false, "Failed to request shepherd migration purge: " .. tostring(err_or_event)
+        return false, "Failed to request shepherd migration purge: " .. tostring(err)
     end
 
     core.log("action", string.format(

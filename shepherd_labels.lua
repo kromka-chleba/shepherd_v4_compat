@@ -26,7 +26,7 @@ local storage = core.get_mod_storage()
 local label_setter_mode = nil
 local label_setter_mode_logged = false
 
-local function is_label_store_available()
+local function is_label_store_fallback_available()
     return ms.label_store
         and type(ms.label_store.new) == "function"
         and type(ms.mapchunk_hash) == "function"
@@ -102,9 +102,13 @@ local function set_labels_with_fallback(pos, labels)
     end
 
     if not label_setter_mode then
+        -- Mode meanings:
+        -- shepherd_api: use ms.labels_to_position()
+        -- label_store_fallback: write labels via label_store directly
+        -- unavailable: neither write path is usable
         if type(ms.labels_to_position) == "function" then
             label_setter_mode = "shepherd_api"
-        elseif is_label_store_available() then
+        elseif is_label_store_fallback_available() then
             label_setter_mode = "label_store_fallback"
         else
             label_setter_mode = "unavailable"
@@ -130,7 +134,8 @@ local function set_labels_with_fallback(pos, labels)
             "[%s] labels_to_position() failed: %s",
             mod_name, tostring(err)
         ))
-        if is_label_store_available() then
+        -- If the primary API fails once, switch mode for subsequent writes.
+        if is_label_store_fallback_available() then
             core.log("warning", "[" .. mod_name .. "] Falling back to direct label_store writes")
             label_setter_mode = "label_store_fallback"
         else

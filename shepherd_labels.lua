@@ -28,6 +28,7 @@ local debug_label_log_limit = tonumber(core.settings:get("shepherd_v4_debug_log_
 if debug_label_log_limit < 0 then
     debug_label_log_limit = 0
 end
+local max_sampled_nodes_per_block = 8
 local debug_logged_labeled_blocks = 0
 local debug_logged_unlabeled_blocks = 0
 local debug_stats = {
@@ -176,7 +177,7 @@ local function process_mapblock(block_data)
             unknown_count = unknown_count + 1
         end
         if node_name ~= "ignore" and node_name ~= "unknown" then
-            if #sampled_nodes < 8 and not sampled_nodes_set[node_name] then
+            if #sampled_nodes < max_sampled_nodes_per_block and not sampled_nodes_set[node_name] then
                 table.insert(sampled_nodes, node_name)
                 sampled_nodes_set[node_name] = true
             end
@@ -207,9 +208,7 @@ local function process_mapblock(block_data)
     end
     debug_log_labeled_block(pos, node_pos, labels_array, matched_nodes)
 
-    local ok, err = pcall(function()
-        ms.labels_to_position(node_pos, labels_array)
-    end)
+    local ok, err = pcall(ms.labels_to_position, node_pos, labels_array)
     if not ok then
         core.log("error", string.format(
             "[%s] labels_to_position() failed at mapblock (%d,%d,%d): %s",

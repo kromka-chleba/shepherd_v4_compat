@@ -7,7 +7,8 @@ local mod_path = core.get_modpath(mod_name)
 
 core.log("action", "[" .. mod_name .. "] Loading shepherd v4 compatibility...")
 
-assert(mapchunk_shepherd, "mapchunk_shepherd mod must be loaded before shepherd_v4_compat")
+assert(mapchunk_shepherd,
+    "[" .. mod_name .. "] mapchunk_shepherd mod must be loaded before " .. mod_name)
 local ms = mapchunk_shepherd
 
 -- Tags used by this compatibility module for mapchunk labels.

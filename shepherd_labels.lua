@@ -140,7 +140,7 @@ local function run_migration()
     end
 
     assert(ms.database and ms.database.purge and ms.database.initialize,
-        "[" .. mod_name .. "] mapchunk_shepherd database API is not available. Ensure mapchunk_shepherd is loaded and up to date.")
+        "[" .. mod_name .. "] mapchunk_shepherd database API is missing required methods (purge/initialize).")
     core.log("action", "[" .. mod_name .. "] Purging shepherd database before migration relabeling...")
     ms.database.purge()
     ms.database.initialize()

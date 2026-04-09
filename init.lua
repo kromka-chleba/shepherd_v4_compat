@@ -52,7 +52,7 @@ shepherd_v4_compat.ensure_compat_tags_registered = ensure_compat_tags_registered
 shepherd_v4_compat.compat_tags = compat_tags
 
 if not ensure_compat_tags_registered() then
-    core.log("error", "[" .. mod_name .. "] Failed to register compatibility tags")
+    error("[" .. mod_name .. "] Failed to register compatibility tags; aborting mod initialization")
 end
 
 -- Try to use insecure environment for SQL-based compatibility first

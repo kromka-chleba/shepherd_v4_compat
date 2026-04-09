@@ -77,6 +77,29 @@ local group_to_labels = {
     ["winter_soil"] = {"seasonal_plants", "winter_soil"},
 }
 
+local seasonal_soil_name_set = {}
+local winter_soil_name_set = {}
+
+local function register_soil_name_set(target_set, names)
+    if type(names) ~= "table" then
+        return
+    end
+    for _, name in ipairs(names) do
+        if type(name) == "string" and name ~= "" then
+            target_set[name] = true
+        end
+    end
+end
+
+if nodes_nature then
+    if type(nodes_nature.get_seasonal_soil_names) == "function" then
+        register_soil_name_set(seasonal_soil_name_set, nodes_nature.get_seasonal_soil_names())
+    end
+    if type(nodes_nature.get_winter_soil_names) == "function" then
+        register_soil_name_set(winter_soil_name_set, nodes_nature.get_winter_soil_names())
+    end
+end
+
 -- Check if a node belongs to a group
 local function node_has_group(node_name, group)
     local node_def = core.registered_nodes[node_name]
@@ -104,6 +127,15 @@ local function get_labels_for_node(node_name)
                 table.insert(labels, label)
             end
         end
+    end
+
+    if seasonal_soil_name_set[node_name] then
+        table.insert(labels, "seasonal_plants")
+        table.insert(labels, "spring_soil")
+    end
+    if winter_soil_name_set[node_name] then
+        table.insert(labels, "seasonal_plants")
+        table.insert(labels, "winter_soil")
     end
     
     return labels

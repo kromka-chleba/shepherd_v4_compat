@@ -132,7 +132,7 @@ local function run_migration()
     end
 
     if not (ms.database and ms.database.purge and ms.database.initialize) then
-        core.log("error", "[" .. mod_name .. "] Migration aborted: mapchunk_shepherd database API is missing required methods (purge/initialize)")
+        core.log("error", "[" .. mod_name .. "] Migration aborted: shepherd database API is missing required methods (purge/initialize)")
         return
     end
     core.log("action", "[" .. mod_name .. "] Purging shepherd database before migration relabeling...")

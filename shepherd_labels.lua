@@ -344,21 +344,25 @@ local function run_migration(force)
         return
     end
     migration_running = true
-    -- This callback is executing now, so the migration is no longer merely scheduled.
-    migration_scheduled = false
 
     if not force and should_skip_migration() then
+        migration_scheduled = false
         migration_running = false
         return
     end
     if not ensure_required_tags_defined() then
+        migration_scheduled = false
         migration_running = false
         return
     end
     if not ensure_shepherd_database_api() then
+        migration_scheduled = false
         migration_running = false
         return
     end
+
+    -- This callback is executing now, so the migration is no longer merely scheduled.
+    migration_scheduled = false
 
     if force then
         storage:set_string("migration_complete", "false")
@@ -423,7 +427,7 @@ end
 local function cleanup_expired_force_confirmations(now)
     now = now or os.time()
     for player_name, expires_at in pairs(pending_force_confirmations) do
-        if now > expires_at then
+        if now >= expires_at then
             pending_force_confirmations[player_name] = nil
         end
     end
@@ -445,7 +449,7 @@ local function confirm_force_migration(name)
     if not expires_at then
         return false, "No pending force migration request. Run /shepherd_v4_migrate force first."
     end
-    if now > expires_at then
+    if now >= expires_at then
         pending_force_confirmations[name] = nil
         return false, "Force migration confirmation expired. Run /shepherd_v4_migrate force again."
     end

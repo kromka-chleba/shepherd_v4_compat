@@ -25,7 +25,6 @@ local shepherd_migration = assert(
     "[" .. mod_name .. "] Failed to load shepherd_migration.lua"
 )
 
-mapchunk_shepherd = mapchunk_shepherd  -- Ensure global is loaded before accessing
 assert(mapchunk_shepherd, "mapchunk_shepherd mod must be loaded before shepherd_v4_compat")
 local ms = mapchunk_shepherd
 

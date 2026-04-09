@@ -12,7 +12,7 @@ if not secenv then
     return false
 end
 
-local function load_required_module(path, file_name)
+local function require_module(path, file_name)
     local loaded = dofile(path)
     if not loaded then
         error("[" .. mod_name .. "] Failed to load " .. file_name)
@@ -20,15 +20,15 @@ local function load_required_module(path, file_name)
     return loaded
 end
 
-local sql_map_reader = load_required_module(
+local sql_map_reader = require_module(
     core.get_modpath(mod_name) .. "/sql_map_reader.lua",
     "sql_map_reader.lua"
 )
-local migration_debug = load_required_module(
+local migration_debug = require_module(
     core.get_modpath(mod_name) .. "/migration_debug.lua",
     "migration_debug.lua"
 )
-local shepherd_migration = load_required_module(
+local shepherd_migration = require_module(
     core.get_modpath(mod_name) .. "/shepherd_migration.lua",
     "shepherd_migration.lua"
 )

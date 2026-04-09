@@ -7,7 +7,6 @@ assert(mapchunk_shepherd, string.format(
     "[%s] mapchunk_shepherd mod must be loaded before this compatibility module",
     mod_name
 ))
-shepherd_v4_compat.ms = mapchunk_shepherd
 
 local secenv = shepherd_v4_compat.secenv
 local sql_loaded = false

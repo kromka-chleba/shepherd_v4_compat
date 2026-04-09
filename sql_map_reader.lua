@@ -133,19 +133,8 @@ function sql_map_reader.read_mapblock_nodes(block_pos)
         end
     end
 
-    if #voxel_data == 4096 then
-        for i = 1, 4096 do
-            collect_node(voxel_data[i])
-        end
-    else
-        local area = VoxelArea:new({MinEdge = emin, MaxEdge = emax})
-        for z = minp.z, maxp.z do
-            for y = minp.y, maxp.y do
-                for x = minp.x, maxp.x do
-                    collect_node(voxel_data[area:index(x, y, z)])
-                end
-            end
-        end
+    for i = 1, #voxel_data do
+        collect_node(voxel_data[i])
     end
 
     return {

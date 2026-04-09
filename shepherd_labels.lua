@@ -253,6 +253,7 @@ local function ensure_required_tags_defined()
     return true
 end
 
+-- Guard migration entry points behind the shepherd DB API required by this module.
 local function ensure_shepherd_database_api()
     if not (ms.database
         and type(ms.database.purge_for_migration) == "function"
@@ -287,6 +288,7 @@ local function is_migration_purge_event(event_data)
         and event_data.reason == "migration"
 end
 
+-- Normalize purge sequence values to a positive integer for durable deduplication.
 local function parse_purge_seq(raw_seq)
     local seq = tonumber(raw_seq)
     if not seq then
@@ -299,6 +301,7 @@ local function parse_purge_seq(raw_seq)
     return seq
 end
 
+-- Accept only strictly newer migration purge sequence numbers.
 local function can_consume_migration_purge_seq(purge_seq)
     if not purge_seq then
         return false
@@ -376,7 +379,7 @@ local function finalize_migration(block_count, label_write_failures, elapsed)
     end
 end
 
--- Run the migration
+-- Execute the migration only when preconditions are satisfied and purge-armed.
 local function run_migration()
     local function finish_run(clear_purge_arm)
         migration_scheduled = false
@@ -419,6 +422,7 @@ local function run_migration()
     finish_run(true)
 end
 
+-- Debounce migration scheduling after a confirmed migration purge signal.
 local function schedule_migration(trigger)
     if migration_complete then
         return
@@ -436,6 +440,7 @@ local function schedule_migration(trigger)
     core.after(migration_defer_seconds, run_migration)
 end
 
+-- Handle live purge callbacks and arm migration for valid migration purge events.
 local function handle_database_purged(event_data)
     if not is_migration_purge_event(event_data) then
         return
@@ -452,6 +457,7 @@ local function handle_database_purged(event_data)
     schedule_migration("database_purged:migration")
 end
 
+-- Reconcile startup state using durable shepherd purge state (missed-callback safe).
 local function reconcile_with_shepherd_purge_state()
     if migration_complete then
         return
@@ -489,6 +495,7 @@ local function reconcile_with_shepherd_purge_state()
     handle_database_purged(event_data)
 end
 
+-- Chat command helper: request migration purge and wait for callback-driven migration.
 local function request_manual_migration_purge(requester_name)
     if migration_running then
         return false, "Migration is already running; purge request denied."

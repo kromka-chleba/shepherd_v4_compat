@@ -49,19 +49,6 @@ The mod follows this data flow:
 
 **Migration safety gate:** map migration does not run unless shepherd explicitly confirms that a migration purge happened via callback payload or durable purge state.
 
-### SQL Migration Control Functions (`shepherd_labels.lua`)
-
-The SQL migration path is orchestrated by these helper functions:
-
-- `ensure_shepherd_database_api()`: Validates that shepherd exposes required database methods (`purge_for_migration`, `register_on_purged`, `initialize`, `get_purge_state`).
-- `parse_purge_seq(raw_seq)`: Normalizes purge sequence input to a positive integer, returning `nil` for invalid values.
-- `can_consume_migration_purge_seq(purge_seq)`: Enforces deduplication by requiring a strictly newer purge sequence than the one already handled.
-- `handle_database_purged(event_data)`: Validates incoming purge callback payloads and arms migration only for `database_purged` events with `reason = "migration"` and a valid sequence.
-- `reconcile_with_shepherd_purge_state()`: On startup, reads durable purge state via `get_purge_state()` and feeds it through the same event handling path as live callbacks.
-- `schedule_migration(trigger)`: Debounces/schedules deferred migration execution after purge confirmation.
-- `run_migration()`: Executes guarded migration flow (preconditions, shepherd re-init, mapblock processing, completion state persistence).
-- `request_manual_migration_purge(requester_name)`: Implements `/shepherd_v4_migrate` by requesting shepherd purge and waiting for the resulting purge callback.
-
 **Requirements:**
 - Add `shepherd_v4_compat` to your trusted mods list in `minetest.conf`:
   ```

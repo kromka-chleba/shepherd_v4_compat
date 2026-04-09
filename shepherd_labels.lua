@@ -285,28 +285,26 @@ end
     return labels_array, matched_nodes, sampled_nodes, unknown_count
 end
 
--- Run the migration
-local function run_migration()
-    if migration_running then
-        return
-    end
-    migration_running = true
-
+local function should_skip_migration()
     if migration_complete or storage:get_string("migration_complete") == "true" then
         core.log("action", "[" .. mod_name .. "] Migration already done, skipping.")
         migration_complete = true
-        migration_running = false
-        return
+        return true
     end
+    return false
+end
 
+local function ensure_required_tags_defined()
     if shepherd_v4_compat and shepherd_v4_compat.ensure_compat_tags_defined then
         if not shepherd_v4_compat.ensure_compat_tags_defined() then
             core.log("error", "[" .. mod_name .. "] Migration aborted: required Exile tags are not defined")
-            migration_running = false
-            return
+            return false
         end
     end
+    return true
+end
 
+local function ensure_shepherd_database_api()
     if not (ms.database
         and type(ms.database.purge) == "function"
         and type(ms.database.initialize) == "function") then
@@ -314,29 +312,32 @@ local function run_migration()
             "[%s] Migration aborted: shepherd database API must provide callable purge() and initialize() methods",
             mod_name
         ))
-        migration_running = false
-        return
+        return false
     end
+    return true
+end
+
+local function reset_shepherd_database()
     core.log("action", "[" .. mod_name .. "] Purging shepherd database before migration relabeling...")
     ms.database.purge()
     ms.database.initialize()
+end
 
+local function migrate_mapblocks()
     core.log("action", "[" .. mod_name .. "] Starting mapblock label migration...")
-    
-    -- Send initial message to all connected players
     core.chat_send_all("[" .. mod_name .. "] Starting world migration. This may take a while for large worlds...")
-    
+
     local start_time = os.clock()
     local block_count = 0
     local label_write_failures = 0
     local last_chat_time = start_time
-    
+
     sql_map_reader.iterate_blocks(function(block_data)
         if not process_mapblock(block_data) then
             label_write_failures = label_write_failures + 1
         end
         block_count = block_count + 1
-        
+
         -- Log progress every 1000 blocks
         if block_count % 1000 == 0 then
             core.log("action", string.format(
@@ -344,7 +345,7 @@ local function run_migration()
                 block_count
             ))
         end
-        
+
         -- Send chat message to players every 10 seconds to show progress
         -- Check time only every 100 blocks to reduce os.clock() overhead
         if block_count % 100 == 0 then
@@ -358,8 +359,11 @@ local function run_migration()
             end
         end
     end)
-    
-    local elapsed = os.clock() - start_time
+
+    return block_count, label_write_failures, os.clock() - start_time
+end
+
+local function finalize_migration(block_count, label_write_failures, elapsed)
     local completion_msg = string.format(
         "[" .. mod_name .. "] Migration complete: %d mapblocks in %.2f seconds",
         block_count, elapsed
@@ -383,6 +387,31 @@ local function run_migration()
     core.chat_send_all(completion_msg)
     storage:set_string("migration_complete", "true")
     migration_complete = true
+end
+
+-- Run the migration
+local function run_migration()
+    if migration_running then
+        return
+    end
+    migration_running = true
+
+    if should_skip_migration() then
+        migration_running = false
+        return
+    end
+    if not ensure_required_tags_defined() then
+        migration_running = false
+        return
+    end
+    if not ensure_shepherd_database_api() then
+        migration_running = false
+        return
+    end
+
+    reset_shepherd_database()
+    local block_count, label_write_failures, elapsed = migrate_mapblocks()
+    finalize_migration(block_count, label_write_failures, elapsed)
     migration_running = false
 end
 

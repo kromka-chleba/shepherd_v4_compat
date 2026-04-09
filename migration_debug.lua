@@ -1,4 +1,4 @@
-local M = {}
+local migration_debug_module = {}
 
 local function sorted_keys(t)
     local keys = {}
@@ -22,7 +22,7 @@ local function format_label_hits(label_hits)
     return table.concat(parts, ", ")
 end
 
-function M.new(opts)
+function migration_debug_module.new(opts)
     local core = opts.core
     local mod_name = opts.mod_name
     local ms = opts.ms
@@ -90,4 +90,4 @@ function M.new(opts)
     return ctx
 end
 
-return M
+return migration_debug_module

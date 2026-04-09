@@ -113,33 +113,27 @@ function sql_map_reader.decode_mapblock(block_data, block_pos)
         }
     end
 
-    local area = VoxelArea:new({MinEdge = emin, MaxEdge = emax})
     local voxel_data = vm:get_data()
     local nodes = {}
     local id_name_table = {}
     local cid_to_local_id = {}
     local next_local_id = 0
 
-    for z = minp.z, maxp.z do
-        for y = minp.y, maxp.y do
-            for x = minp.x, maxp.x do
-                local vi = area:index(x, y, z)
-                local cid = voxel_data[vi]
-                local node_name = cid_name_cache[cid]
-                if not node_name then
-                    node_name = core.get_name_from_content_id(cid) or "unknown"
-                    cid_name_cache[cid] = node_name
-                end
-                nodes[#nodes + 1] = node_name
+    for i = 1, #voxel_data do
+        local cid = voxel_data[i]
+        local node_name = cid_name_cache[cid]
+        if not node_name then
+            node_name = core.get_name_from_content_id(cid) or "unknown"
+            cid_name_cache[cid] = node_name
+        end
+        nodes[#nodes + 1] = node_name
 
-                local local_id = cid_to_local_id[cid]
-                if local_id == nil then
-                    local_id = next_local_id
-                    next_local_id = next_local_id + 1
-                    cid_to_local_id[cid] = local_id
-                    id_name_table[local_id] = node_name
-                end
-            end
+        local local_id = cid_to_local_id[cid]
+        if local_id == nil then
+            local_id = next_local_id
+            next_local_id = next_local_id + 1
+            cid_to_local_id[cid] = local_id
+            id_name_table[local_id] = node_name
         end
     end
 

@@ -63,11 +63,7 @@ local migration_scheduled = false
 local migration_running = false
 local migration_complete = storage:get_string("migration_complete") == "true"
 local force_confirmation_window_seconds = 30
--- Avoid scanning the whole pending-confirmation table on every command.
--- Cleanup runs only after this many pending entries exist.
-local force_confirmation_cleanup_min_count = 32
 local pending_force_confirmations = {}
-local pending_force_confirmation_count = 0
 
 -- Node to label mappings based on shepherd_v3_compat patterns
 -- Multiple labels can be assigned to a position
@@ -425,14 +421,10 @@ local function trigger_manual_migration(requester_name, force)
 end
 
 local function cleanup_expired_force_confirmations(now)
-    if pending_force_confirmation_count < force_confirmation_cleanup_min_count then
-        return
-    end
     now = now or os.time()
     for player_name, expires_at in pairs(pending_force_confirmations) do
         if now > expires_at then
             pending_force_confirmations[player_name] = nil
-            pending_force_confirmation_count = pending_force_confirmation_count - 1
         end
     end
 end
@@ -440,9 +432,6 @@ end
 local function request_force_migration_confirmation(name)
     local now = os.time()
     cleanup_expired_force_confirmations(now)
-    if not pending_force_confirmations[name] then
-        pending_force_confirmation_count = pending_force_confirmation_count + 1
-    end
     pending_force_confirmations[name] = now + force_confirmation_window_seconds
     return false, string.format(
         "WARNING: This will erase and rebuild all shepherd database labels. Run /shepherd_v4_migrate_confirm within %d seconds to proceed.",
@@ -458,11 +447,9 @@ local function confirm_force_migration(name)
     end
     if now > expires_at then
         pending_force_confirmations[name] = nil
-        pending_force_confirmation_count = pending_force_confirmation_count - 1
         return false, "Force migration confirmation expired. Run /shepherd_v4_migrate force again."
     end
     pending_force_confirmations[name] = nil
-    pending_force_confirmation_count = pending_force_confirmation_count - 1
     return trigger_manual_migration(name, true)
 end
 

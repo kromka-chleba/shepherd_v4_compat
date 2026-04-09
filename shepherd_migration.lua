@@ -100,9 +100,7 @@ function shepherd_migration.setup(opts)
                     "[" .. mod_name .. "] Processed %d mapblocks...",
                     block_count
                 ))
-            end
-
-            if block_count % 100 == 0 then
+            elseif block_count % 100 == 0 then
                 local current_time = os.clock()
                 if current_time - last_chat_time >= 10 then
                     core.chat_send_all(string.format(

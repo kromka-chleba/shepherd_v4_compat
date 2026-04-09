@@ -56,6 +56,7 @@ local debug_stats = {
 }
 local migration_scheduled = false
 local migration_running = false
+local migration_complete = storage:get_string("migration_complete") == "true"
 
 -- Node to label mappings based on shepherd_v3_compat patterns
 -- Multiple labels can be assigned to a position
@@ -285,8 +286,9 @@ local function run_migration()
     end
     migration_running = true
 
-    if storage:get_string("migration_complete") == "true" then
+    if migration_complete or storage:get_string("migration_complete") == "true" then
         core.log("action", "[" .. mod_name .. "] Migration already done, skipping.")
+        migration_complete = true
         migration_running = false
         return
     end
@@ -374,10 +376,14 @@ local function run_migration()
     end
     core.chat_send_all(completion_msg)
     storage:set_string("migration_complete", "true")
+    migration_complete = true
     migration_running = false
 end
 
 local function schedule_migration(trigger)
+    if migration_complete then
+        return
+    end
     if migration_scheduled then
         return
     end
@@ -398,7 +404,7 @@ end)
 
 -- Safety fallback: if startup callback timing differs, trigger on first join
 core.register_on_joinplayer(function()
-    if storage:get_string("migration_complete") ~= "true" then
+    if not migration_complete then
         schedule_migration("on_joinplayer")
     end
 end)

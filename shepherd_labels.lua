@@ -252,10 +252,11 @@ end
 
 local function ensure_shepherd_database_api()
     if not (ms.database
-        and type(ms.database.purge) == "function"
+        and type(ms.database.purge_for_migration) == "function"
+        and type(ms.database.last_purge_event) == "function"
         and type(ms.database.initialize) == "function") then
         core.log("error", string.format(
-            "[%s] Migration aborted: shepherd database API must provide callable purge() and initialize() methods",
+            "[%s] Migration aborted: shepherd database API must provide callable purge_for_migration(), last_purge_event(), and initialize() methods",
             mod_name
         ))
         return false
@@ -264,9 +265,49 @@ local function ensure_shepherd_database_api()
 end
 
 local function reset_shepherd_database()
-    core.log("action", "[" .. mod_name .. "] Purging shepherd database before migration relabeling...")
-    ms.database.purge()
-    ms.database.initialize()
+    core.log("action", "[" .. mod_name .. "] Requesting shepherd migration purge before relabeling...")
+
+    local ok, purge_event_or_err = pcall(ms.database.purge_for_migration)
+    if not ok then
+        core.log("error", string.format(
+            "[%s] Migration aborted: purge_for_migration() failed: %s",
+            mod_name, tostring(purge_event_or_err)
+        ))
+        return false
+    end
+
+    local purge_event = purge_event_or_err
+    if type(purge_event) ~= "table"
+        or purge_event.event ~= "database_purged"
+        or purge_event.reason ~= "migration" then
+        core.log("error", string.format(
+            "[%s] Migration aborted: purge_for_migration() did not confirm a migration purge event",
+            mod_name
+        ))
+        return false
+    end
+
+    local last_purge_event = ms.database.last_purge_event()
+    if type(last_purge_event) ~= "table"
+        or last_purge_event.event ~= "database_purged"
+        or last_purge_event.reason ~= "migration" then
+        core.log("error", string.format(
+            "[%s] Migration aborted: last_purge_event() does not confirm migration purge",
+            mod_name
+        ))
+        return false
+    end
+
+    local init_ok, init_err = pcall(ms.database.initialize)
+    if not init_ok then
+        core.log("error", string.format(
+            "[%s] Migration aborted: initialize() failed after purge: %s",
+            mod_name, tostring(init_err)
+        ))
+        return false
+    end
+
+    return true
 end
 
 local function migrate_mapblocks()
@@ -355,7 +396,10 @@ local function run_migration()
         return
     end
 
-    reset_shepherd_database()
+    if not reset_shepherd_database() then
+        migration_running = false
+        return
+    end
     local block_count, label_write_failures, elapsed = migrate_mapblocks()
     finalize_migration(block_count, label_write_failures, elapsed)
     migration_running = false

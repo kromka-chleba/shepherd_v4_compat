@@ -75,13 +75,24 @@ end
 
 -- Decode position hash (for old schema only)
 local function decode_pos_hash(hash)
-        hash = hash + 0x800800800
-        local x = bit.band(hash, 0xFFF) - 0x800
-        local y = bit.rshift(hash, 12)
-        y = bit.band(y, 0xFFF) - 0x800
-        local z = bit.rshift(hash, 24)
-        z = bit.band(z, 0xFFF) - 0x800
-        return { x = x, y = y, z = z}
+        local value = tonumber(hash)
+        if not value then
+            return nil
+        end
+
+        -- Match Luanti's MapDatabase::getIntegerAsBlock using arithmetic.
+        -- Do not use Lua bitops here: old-schema position values exceed 32-bit.
+        value = value + 0x800800800
+        local x = (value % 0x1000) - 0x800
+        value = math.floor(value / 0x1000)
+        local y = (value % 0x1000) - 0x800
+        local z = (math.floor(value / 0x1000) % 0x1000) - 0x800
+
+        return {
+            x = x,
+            y = y,
+            z = z,
+        }
 end
 
 -- Decode a mapblock and return node data
@@ -166,9 +177,17 @@ function sql_map_reader.iterate_blocks(callback)
         -- Old schema (pre-5.12.0): SELECT pos,data FROM blocks
         for row in db:nrows("SELECT pos,data FROM blocks") do
             local block_pos = decode_pos_hash(row.pos)
+            if not block_pos then
+                core.log("warning", string.format(
+                    "[shepherd_v4_compat] Skipping block row with invalid pos value: %s",
+                    tostring(row.pos)
+                ))
+                goto continue_old_block_row
+            end
             local block_data = sql_map_reader.decode_mapblock(row.data, block_pos)
             callback(block_data)
             count = count + 1
+            ::continue_old_block_row::
         end
     end
     

@@ -267,16 +267,16 @@ end
 local function reset_shepherd_database()
     core.log("action", "[" .. mod_name .. "] Requesting shepherd migration purge before relabeling...")
 
-    local ok, purge_event_or_err = pcall(ms.database.purge_for_migration)
+    local ok, purge_result = pcall(ms.database.purge_for_migration)
     if not ok then
         core.log("error", string.format(
             "[%s] Migration aborted: purge_for_migration() failed: %s",
-            mod_name, tostring(purge_event_or_err)
+            mod_name, tostring(purge_result)
         ))
         return false
     end
 
-    local purge_event = purge_event_or_err
+    local purge_event = purge_result
     if type(purge_event) ~= "table"
         or purge_event.event ~= "database_purged"
         or purge_event.reason ~= "migration" then

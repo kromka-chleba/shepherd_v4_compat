@@ -1,0 +1,5 @@
+# shepherd_v4_compat settings
+
+shepherd_v4_use_lbm_fallback (Enable LBM fallback compatibility when SQL-based migration is unavailable) bool false
+shepherd_v4_debug_labels (Enable debug logging for SQL migration label writes and unlabeled mapblocks) bool false
+shepherd_v4_debug_log_limit (Maximum number of labeled and unlabeled debug samples to log) int 30 0 100000

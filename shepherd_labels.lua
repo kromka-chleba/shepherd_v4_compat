@@ -23,6 +23,8 @@ assert(mapchunk_shepherd, "mapchunk_shepherd mod must be loaded before shepherd_
 local ms = mapchunk_shepherd
 
 local storage = core.get_mod_storage()
+local label_setter_mode = nil
+local label_setter_mode_logged = false
 
 -- Node to label mappings based on shepherd_v3_compat patterns
 -- Multiple labels can be assigned to a position
@@ -88,17 +90,66 @@ end
 
 -- Process a single mapblock and assign labels
 -- Converts mapblock position to node position, then labels the containing mapchunk
+local function set_labels_with_fallback(pos, labels)
+    if #labels == 0 then
+        return true
+    end
+
+    if not label_setter_mode then
+        if type(ms.labels_to_position) == "function" then
+            label_setter_mode = "shepherd_api"
+        elseif ms.label_store and type(ms.label_store.new) == "function"
+                and type(ms.mapchunk_hash) == "function" then
+            label_setter_mode = "label_store_fallback"
+        else
+            label_setter_mode = "unavailable"
+        end
+    end
+
+    if not label_setter_mode_logged then
+        core.log("action", "[" .. mod_name .. "] Label setter mode: " .. label_setter_mode)
+        label_setter_mode_logged = true
+    end
+
+    if label_setter_mode == "shepherd_api" then
+        local ok, err = pcall(ms.labels_to_position, pos, labels)
+        if ok then
+            return true
+        end
+        core.log("error", "[" .. mod_name .. "] labels_to_position() failed: " .. tostring(err))
+        if ms.label_store and type(ms.label_store.new) == "function"
+                and type(ms.mapchunk_hash) == "function" then
+            core.log("warning", "[" .. mod_name .. "] Falling back to direct label_store writes")
+            label_setter_mode = "label_store_fallback"
+        else
+            label_setter_mode = "unavailable"
+        end
+    end
+
+    if label_setter_mode == "label_store_fallback" then
+        local ok, err = pcall(function()
+            local hash = ms.mapchunk_hash(pos)
+            local ls = ms.label_store.new(hash)
+            ls:add_labels(labels)
+            ls:save_to_disk()
+        end)
+        if ok then
+            return true
+        end
+        core.log("error", "[" .. mod_name .. "] label_store fallback failed: " .. tostring(err))
+        label_setter_mode = "unavailable"
+    end
+
+    return false
+end
+
 local function process_mapblock(block_data)
     local pos = block_data.pos
     local nodes = block_data.nodes
     
     -- Convert mapblock position to node position (multiply by 16)
     -- The shepherd API accepts node positions and labels the containing mapchunk
-    local node_pos = {
-        x = pos.x * 16,
-        y = pos.y * 16,
-        z = pos.z * 16
-    }
+    local node_pos = vector.new(pos.x * 16, pos.y * 16, pos.z * 16)
     
     -- Track which labels should be added to the mapchunk containing this mapblock
     local labels_to_add = {}
@@ -119,9 +170,7 @@ local function process_mapblock(block_data)
         table.insert(labels_array, label)
     end
     
-    if #labels_array > 0 then
-        ms.labels_to_position(node_pos, labels_array)
-    end
+    return set_labels_with_fallback(node_pos, labels_array)
 end
 
 -- Run the migration
@@ -156,10 +205,13 @@ local function run_migration()
     
     local start_time = os.clock()
     local block_count = 0
+    local label_write_failures = 0
     local last_chat_time = start_time
     
     sql_map_reader.iterate_blocks(function(block_data)
-        process_mapblock(block_data)
+        if not process_mapblock(block_data) then
+            label_write_failures = label_write_failures + 1
+        end
         block_count = block_count + 1
         
         -- Log progress every 1000 blocks
@@ -190,6 +242,12 @@ local function run_migration()
         block_count, elapsed
     )
     core.log("action", completion_msg)
+    if label_write_failures > 0 then
+        core.log("error", string.format(
+            "[" .. mod_name .. "] Migration finished with %d mapblocks that failed to save labels",
+            label_write_failures
+        ))
+    end
     core.chat_send_all(completion_msg)
     storage:set_string("migration_complete", "true")
 end

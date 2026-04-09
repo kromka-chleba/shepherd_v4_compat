@@ -8,8 +8,8 @@ local mod_path = core.get_modpath(mod_name)
 core.log("action", "[" .. mod_name .. "] Loading shepherd v4 compatibility...")
 
 assert(mapchunk_shepherd, string.format(
-    "[%s] mapchunk_shepherd mod must be loaded before %s",
-    mod_name, mod_name
+    "[%s] mapchunk_shepherd mod must be loaded before this compatibility module",
+    mod_name
 ))
 local ms = mapchunk_shepherd
 

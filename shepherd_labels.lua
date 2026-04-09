@@ -257,9 +257,10 @@ local function ensure_shepherd_database_api()
     if not (ms.database
         and type(ms.database.purge_for_migration) == "function"
         and type(ms.database.register_on_purged) == "function"
-        and type(ms.database.initialize) == "function") then
+        and type(ms.database.initialize) == "function"
+        and type(ms.database.get_purge_state) == "function") then
         core.log("error", string.format(
-            "[%s] Migration aborted: shepherd database API must provide callable purge_for_migration(), register_on_purged(), and initialize() methods",
+            "[%s] Migration aborted: shepherd database API must provide callable purge_for_migration(), register_on_purged(), initialize(), and get_purge_state() methods",
             mod_name
         ))
         return false
@@ -299,10 +300,8 @@ local function parse_purge_seq(raw_seq)
 end
 
 local function can_consume_migration_purge_seq(purge_seq)
-    -- Older shepherd versions can emit purge callbacks without purge_seq.
-    -- Allow these events so fallback reconciliation via last_purge_event still works.
     if not purge_seq then
-        return true
+        return false
     end
     return purge_seq > last_handled_migration_purge_seq
 end
@@ -457,56 +456,37 @@ local function reconcile_with_shepherd_purge_state()
     if migration_complete then
         return
     end
-    if type(ms.database.get_purge_state) == "function" then
-        local ok, purge_state = pcall(ms.database.get_purge_state)
-        if not ok then
-            core.log("warning", string.format(
-                "[%s] Failed to query shepherd purge state: %s",
-                mod_name, tostring(purge_state)
-            ))
-            return
-        end
-        if type(purge_state) ~= "table" then
-            return
-        end
-        local seq = parse_purge_seq(purge_state.seq)
-        if not can_consume_migration_purge_seq(seq) then
-            return
-        end
-        if purge_state.reason ~= "migration" then
-            return
-        end
-
-        local event_data = {
-            event = "database_purged",
-            reason = "migration",
-            purge_seq = seq,
-        }
-        if type(purge_state.event) == "table" then
-            for key, value in pairs(purge_state.event) do
-                event_data[key] = value
-            end
-        end
-        event_data.purge_seq = parse_purge_seq(event_data.purge_seq) or seq
-        handle_database_purged(event_data)
+    local ok, purge_state = pcall(ms.database.get_purge_state)
+    if not ok then
+        core.log("warning", string.format(
+            "[%s] Failed to query shepherd purge state: %s",
+            mod_name, tostring(purge_state)
+        ))
+        return
+    end
+    if type(purge_state) ~= "table" then
+        return
+    end
+    local seq = parse_purge_seq(purge_state.seq)
+    if not can_consume_migration_purge_seq(seq) then
+        return
+    end
+    if purge_state.reason ~= "migration" then
         return
     end
 
-    if type(ms.database.last_purge_event) == "function" then
-        core.log("action", string.format(
-            "[%s] Shepherd get_purge_state() unavailable, falling back to last_purge_event()",
-            mod_name
-        ))
-        local ok, last_event = pcall(ms.database.last_purge_event)
-        if ok and type(last_event) == "table" then
-            handle_database_purged(last_event)
-        elseif not ok then
-            core.log("warning", string.format(
-                "[%s] Failed to query shepherd last purge event: %s",
-                mod_name, tostring(last_event)
-            ))
+    local event_data = {
+        event = "database_purged",
+        reason = "migration",
+        purge_seq = seq,
+    }
+    if type(purge_state.event) == "table" then
+        for key, value in pairs(purge_state.event) do
+            event_data[key] = value
         end
     end
+    event_data.purge_seq = parse_purge_seq(event_data.purge_seq) or seq
+    handle_database_purged(event_data)
 end
 
 local function request_manual_migration_purge(requester_name)
@@ -520,7 +500,7 @@ local function request_manual_migration_purge(requester_name)
     end
 
     if not ensure_shepherd_database_api() then
-        return false, "Shepherd database API is missing required methods (purge_for_migration, register_on_purged, or initialize)."
+        return false, "Shepherd database API is missing required methods (purge_for_migration, register_on_purged, initialize, or get_purge_state)."
     end
 
     local ok, err = pcall(ms.database.purge_for_migration)

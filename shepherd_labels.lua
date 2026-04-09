@@ -27,7 +27,8 @@ local label_setter_mode = nil
 local label_setter_mode_logged = false
 
 local function can_use_label_store_fallback()
-    return ms.label_store and type(ms.label_store.new) == "function"
+    return ms.label_store
+        and type(ms.label_store.new) == "function"
         and type(ms.mapchunk_hash) == "function"
 end
 
@@ -196,8 +197,8 @@ local function run_migration()
     end
 
     if not (ms.database
-            and type(ms.database.purge) == "function"
-            and type(ms.database.initialize) == "function") then
+        and type(ms.database.purge) == "function"
+        and type(ms.database.initialize) == "function") then
         core.log("error", string.format(
             "[%s] Migration aborted: shepherd database API must provide callable purge() and initialize() methods",
             mod_name

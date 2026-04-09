@@ -132,11 +132,15 @@ local function run_migration()
     end
 
     if shepherd_v4_compat and shepherd_v4_compat.ensure_compat_tags_registered then
-        shepherd_v4_compat.ensure_compat_tags_registered()
+        local tags_ok = shepherd_v4_compat.ensure_compat_tags_registered()
+        if not tags_ok then
+            core.log("error", "[" .. mod_name .. "] Migration aborted: failed to register compatibility tags")
+            return
+        end
     end
 
     assert(ms.database and ms.database.purge and ms.database.initialize,
-        "mapchunk_shepherd database API is not available")
+        "mapchunk_shepherd database API is not available. Ensure mapchunk_shepherd is loaded and up to date.")
     core.log("action", "[" .. mod_name .. "] Purging shepherd database before migration relabeling...")
     ms.database.purge()
     ms.database.initialize()

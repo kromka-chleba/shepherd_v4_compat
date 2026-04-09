@@ -60,7 +60,7 @@ shepherd_v4_compat.compat_tags = compat_tags
 -- Try to use insecure environment for SQL-based compatibility first
 -- Note: core.request_insecure_environment() MUST be called only from init.lua
 local secenv = core.request_insecure_environment()
-shepherd_v4_compat.secenv = secenv  -- Store for use by submodules (dofile'd files)
+shepherd_v4_compat.secenv = secenv  -- Store for use by submodules loaded via dofile()
 local sql_loaded = false
 
 if secenv then

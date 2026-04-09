@@ -26,7 +26,7 @@ local storage = core.get_mod_storage()
 local label_setter_mode = nil
 local label_setter_mode_logged = false
 
-local function is_label_store_fallback_available()
+local function is_fallback_available()
     return ms.label_store
         and type(ms.label_store.new) == "function"
         and type(ms.mapchunk_hash) == "function"
@@ -97,6 +97,14 @@ end
 -- Process a single mapblock and assign labels
 -- Converts mapblock position to node position, then labels the containing mapchunk
 local function set_labels_with_fallback(pos, labels)
+    if type(labels) ~= "table" then
+        core.log("error", string.format(
+            "[%s] Label write aborted: expected labels table, got %s",
+            mod_name, type(labels)
+        ))
+        return false
+    end
+
     if #labels == 0 then
         return true
     end
@@ -108,7 +116,7 @@ local function set_labels_with_fallback(pos, labels)
         -- unavailable: neither write path is usable
         if type(ms.labels_to_position) == "function" then
             label_setter_mode = "shepherd_api"
-        elseif is_label_store_fallback_available() then
+        elseif is_fallback_available() then
             label_setter_mode = "label_store_fallback"
         else
             label_setter_mode = "unavailable"
@@ -135,7 +143,7 @@ local function set_labels_with_fallback(pos, labels)
             mod_name, tostring(err)
         ))
         -- If the primary API fails once, switch mode for subsequent writes.
-        if is_label_store_fallback_available() then
+        if is_fallback_available() then
             core.log("warning", "[" .. mod_name .. "] Falling back to direct label_store writes")
             label_setter_mode = "label_store_fallback"
         else

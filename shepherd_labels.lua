@@ -255,10 +255,9 @@ local function ensure_shepherd_database_api()
     if not (ms.database
         and type(ms.database.purge_for_migration) == "function"
         and type(ms.database.register_on_purged) == "function"
-        and type(ms.database.last_purge_event) == "function"
         and type(ms.database.initialize) == "function") then
         core.log("error", string.format(
-            "[%s] Migration aborted: shepherd database API must provide callable purge_for_migration(), register_on_purged(), last_purge_event(), and initialize() methods",
+            "[%s] Migration aborted: shepherd database API must provide callable purge_for_migration(), register_on_purged(), and initialize() methods",
             mod_name
         ))
         return false
@@ -435,10 +434,6 @@ local function request_manual_migration_purge(requester_name)
         return false, "Failed to request shepherd migration purge: " .. tostring(err_or_event)
     end
 
-    if not is_migration_purge_event(err_or_event) then
-        return false, "Shepherd did not confirm migration purge."
-    end
-
     core.log("action", string.format(
         "[%s] Manual migration purge requested by %s",
         mod_name,
@@ -453,11 +448,6 @@ core.register_on_mods_loaded(function()
     end
 
     ms.database.register_on_purged(handle_database_purged)
-
-    local last_purge_event = ms.database.last_purge_event()
-    if is_migration_purge_event(last_purge_event) then
-        handle_database_purged(last_purge_event)
-    end
 end)
 
 core.register_chatcommand("shepherd_v4_migrate", {

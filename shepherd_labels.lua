@@ -124,7 +124,10 @@ local function set_labels_with_fallback(pos, labels)
         if ok then
             return true
         end
-        core.log("error", "[" .. mod_name .. "] labels_to_position() failed: " .. tostring(err))
+        core.log("error", string.format(
+            "[%s] labels_to_position() failed: %s",
+            mod_name, tostring(err)
+        ))
         if can_use_label_store_fallback() then
             core.log("warning", "[" .. mod_name .. "] Falling back to direct label_store writes")
             label_setter_mode = "label_store_fallback"
@@ -145,7 +148,10 @@ local function set_labels_with_fallback(pos, labels)
         if ok then
             return true
         end
-        core.log("error", "[" .. mod_name .. "] label_store fallback failed: " .. tostring(err))
+        core.log("error", string.format(
+            "[%s] label_store fallback failed: %s",
+            mod_name, tostring(err)
+        ))
         label_setter_mode = "unavailable"
     end
 
@@ -255,8 +261,8 @@ local function run_migration()
     core.log("action", completion_msg)
     if label_write_failures > 0 then
         core.log("error", string.format(
-            "[" .. mod_name .. "] Migration finished with %d mapblocks that failed to save labels",
-            label_write_failures
+            "[%s] Migration finished with %d mapblocks that failed to save labels",
+            mod_name, label_write_failures
         ))
     end
     core.chat_send_all(completion_msg)

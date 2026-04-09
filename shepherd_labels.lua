@@ -475,15 +475,18 @@ local function reconcile_with_shepherd_purge_state()
             return
         end
 
-        local event_data = purge_state.event
-        if type(event_data) ~= "table" then
-            event_data = {
-                event = "database_purged",
-                reason = "migration",
-                purge_seq = seq,
-            }
-        elseif event_data.purge_seq == nil then
-            event_data.purge_seq = seq
+        local event_data = {
+            event = "database_purged",
+            reason = "migration",
+            purge_seq = seq,
+        }
+        if type(purge_state.event) == "table" then
+            for key, value in pairs(purge_state.event) do
+                event_data[key] = value
+            end
+            if event_data.purge_seq == nil then
+                event_data.purge_seq = seq
+            end
         end
         handle_database_purged(event_data)
         return
@@ -499,7 +502,7 @@ end
 
 local function request_manual_migration_purge(requester_name)
     if migration_running then
-        return false, "Migration is already running; cannot request another purge."
+        return false, "Migration is already running; purge request denied."
     end
 
     if migration_complete or storage:get_string("migration_complete") == "true" then

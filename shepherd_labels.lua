@@ -26,6 +26,11 @@ local storage = core.get_mod_storage()
 local label_setter_mode = nil
 local label_setter_mode_logged = false
 
+local function can_use_label_store_fallback()
+    return ms.label_store and type(ms.label_store.new) == "function"
+        and type(ms.mapchunk_hash) == "function"
+end
+
 -- Node to label mappings based on shepherd_v3_compat patterns
 -- Multiple labels can be assigned to a position
 local node_to_labels = {
@@ -98,8 +103,7 @@ local function set_labels_with_fallback(pos, labels)
     if not label_setter_mode then
         if type(ms.labels_to_position) == "function" then
             label_setter_mode = "shepherd_api"
-        elseif ms.label_store and type(ms.label_store.new) == "function"
-                and type(ms.mapchunk_hash) == "function" then
+        elseif can_use_label_store_fallback() then
             label_setter_mode = "label_store_fallback"
         else
             label_setter_mode = "unavailable"
@@ -117,8 +121,7 @@ local function set_labels_with_fallback(pos, labels)
             return true
         end
         core.log("error", "[" .. mod_name .. "] labels_to_position() failed: " .. tostring(err))
-        if ms.label_store and type(ms.label_store.new) == "function"
-                and type(ms.mapchunk_hash) == "function" then
+        if can_use_label_store_fallback() then
             core.log("warning", "[" .. mod_name .. "] Falling back to direct label_store writes")
             label_setter_mode = "label_store_fallback"
         else
@@ -127,6 +130,8 @@ local function set_labels_with_fallback(pos, labels)
     end
 
     if label_setter_mode == "label_store_fallback" then
+        -- Fallback writes labels directly via label_store for the mapchunk hash.
+        -- This bypasses labels_to_position() when that API fails unexpectedly.
         local ok, err = pcall(function()
             local hash = ms.mapchunk_hash(pos)
             local ls = ms.label_store.new(hash)

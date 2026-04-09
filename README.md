@@ -26,7 +26,7 @@ This is the primary method and requires insecure environment access.
 
 The mod follows this data flow:
 
-1. **SQL Map Reader** (`sql_map_reader.lua`): Reads and decodes mapblock data from the `map.sqlite` database, including:
+1. **SQL Map Reader** (`sql_map_reader.lua`): Reads mapblock positions from `map.sqlite`, then reads node content for those mapblocks from the map, including:
    - Node ID to name mappings
    - Individual node content for all 4096 nodes per mapblock
    - Mapblock position information (in mapblock coordinates)

@@ -13,9 +13,9 @@ local secenv = shepherd_v4_compat.secenv
 local sql_loaded = false
 
 if secenv then
-    local success, sql_lib = pcall(secenv.require, "lsqlite3")
+    local success = pcall(secenv.require, "lsqlite3")
 
-    if success and sql_lib then
+    if success then
         sql_loaded = dofile(mod_path .. "/shepherd_labels.lua")
 
         if sql_loaded then

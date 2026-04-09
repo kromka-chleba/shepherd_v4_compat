@@ -12,21 +12,18 @@ if not secenv then
     return false
 end
 
-local sql_map_reader = dofile(core.get_modpath(mod_name) .. "/sql_map_reader.lua")
-if not sql_map_reader then
-    core.log("error", "[" .. mod_name .. "] Failed to load sql_map_reader.lua")
-    return false
-end
-local migration_debug = dofile(core.get_modpath(mod_name) .. "/migration_debug.lua")
-if not migration_debug then
-    core.log("error", "[" .. mod_name .. "] Failed to load migration_debug.lua")
-    return false
-end
-local shepherd_migration = dofile(core.get_modpath(mod_name) .. "/shepherd_migration.lua")
-if not shepherd_migration then
-    core.log("error", "[" .. mod_name .. "] Failed to load shepherd_migration.lua")
-    return false
-end
+local sql_map_reader = assert(
+    dofile(core.get_modpath(mod_name) .. "/sql_map_reader.lua"),
+    "[" .. mod_name .. "] Failed to load sql_map_reader.lua"
+)
+local migration_debug = assert(
+    dofile(core.get_modpath(mod_name) .. "/migration_debug.lua"),
+    "[" .. mod_name .. "] Failed to load migration_debug.lua"
+)
+local shepherd_migration = assert(
+    dofile(core.get_modpath(mod_name) .. "/shepherd_migration.lua"),
+    "[" .. mod_name .. "] Failed to load shepherd_migration.lua"
+)
 
 mapchunk_shepherd = mapchunk_shepherd  -- Ensure global is loaded before accessing
 assert(mapchunk_shepherd, "mapchunk_shepherd mod must be loaded before shepherd_v4_compat")

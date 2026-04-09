@@ -16,7 +16,7 @@ local compat_tags = {
 
 -- Verify all compatibility tags exist (they are expected to be defined by Exile).
 local function ensure_compat_tags_defined()
-    local ms = shepherd_v4_compat.ms
+    local ms = shepherd_v4_compat.ms or mapchunk_shepherd
     if not (ms and ms.tag and ms.tag.check) then
         core.log("error", "[" .. mod_name .. "] mapchunk_shepherd tag API is unavailable")
         return false

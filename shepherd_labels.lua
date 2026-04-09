@@ -17,9 +17,9 @@ if not sql_map_reader then
     core.log("error", "[" .. mod_name .. "] Failed to load sql_map_reader.lua")
     return false
 end
-local shepherd_debug = dofile(core.get_modpath(mod_name) .. "/shepherd_debug.lua")
-if not shepherd_debug then
-    core.log("error", "[" .. mod_name .. "] Failed to load shepherd_debug.lua")
+local migration_debug = dofile(core.get_modpath(mod_name) .. "/migration_debug.lua")
+if not migration_debug then
+    core.log("error", "[" .. mod_name .. "] Failed to load migration_debug.lua")
     return false
 end
 
@@ -52,7 +52,7 @@ if migration_defer_seconds < 0 then
     migration_defer_seconds = 0
 end
 local max_sampled_nodes_per_block = 8
-local debug_ctx = shepherd_debug.new({
+local debug_ctx = migration_debug.new({
     core = core,
     mod_name = mod_name,
     ms = ms,

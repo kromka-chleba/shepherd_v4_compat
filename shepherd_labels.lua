@@ -111,7 +111,10 @@ local function set_labels_with_fallback(pos, labels)
     end
 
     if not label_setter_mode_logged then
-        core.log("action", "[" .. mod_name .. "] Label setter mode: " .. label_setter_mode)
+        core.log("action", string.format(
+            "[%s] Label setter mode: %s",
+            mod_name, label_setter_mode
+        ))
         label_setter_mode_logged = true
     end
 
@@ -195,8 +198,10 @@ local function run_migration()
     if not (ms.database
             and type(ms.database.purge) == "function"
             and type(ms.database.initialize) == "function") then
-        core.log("error",
-            "[" .. mod_name .. "] Migration aborted: shepherd database API must provide callable purge() and initialize() methods")
+        core.log("error", string.format(
+            "[%s] Migration aborted: shepherd database API must provide callable purge() and initialize() methods",
+            mod_name
+        ))
         return
     end
     core.log("action", "[" .. mod_name .. "] Purging shepherd database before migration relabeling...")

@@ -62,6 +62,8 @@ local debug_ctx = migration_debug.new({
 local migration_scheduled = false
 local migration_running = false
 local migration_complete = storage:get_string("migration_complete") == "true"
+local force_confirmation_window_seconds = 30
+local pending_force_confirmations = {}
 
 -- Node to label mappings based on shepherd_v3_compat patterns
 -- Multiple labels can be assigned to a position
@@ -336,13 +338,15 @@ local function finalize_migration(block_count, label_write_failures, elapsed)
 end
 
 -- Run the migration
-local function run_migration()
+local function run_migration(force)
+    force = force == true
     if migration_running then
         return
     end
     migration_running = true
+    migration_scheduled = false
 
-    if should_skip_migration() then
+    if not force and should_skip_migration() then
         migration_running = false
         return
     end
@@ -353,6 +357,15 @@ local function run_migration()
     if not ensure_shepherd_database_api() then
         migration_running = false
         return
+    end
+
+    if force then
+        storage:set_string("migration_complete", "false")
+        migration_complete = false
+        core.log("warning", string.format(
+            "[%s] Force migration requested: shepherd database will be purged and rebuilt",
+            mod_name
+        ))
     end
 
     reset_shepherd_database()
@@ -378,14 +391,15 @@ local function schedule_migration(trigger)
     core.after(migration_defer_seconds, run_migration)
 end
 
-local function trigger_manual_migration(requester_name)
+local function trigger_manual_migration(requester_name, force)
+    force = force == true
     if migration_running then
         return false, "Migration is already running."
     end
 
-    if migration_complete or storage:get_string("migration_complete") == "true" then
+    if not force and (migration_complete or storage:get_string("migration_complete") == "true") then
         migration_complete = true
-        return false, "Migration is already complete."
+        return false, "Migration is already complete. Use /shepherd_v4_migrate force to run it again."
     end
 
     if migration_scheduled then
@@ -394,12 +408,33 @@ local function trigger_manual_migration(requester_name)
 
     migration_scheduled = true
     core.log("action", string.format(
-        "[%s] Manual migration requested by %s",
+        "[%s] Manual migration requested by %s (force=%s)",
         mod_name,
-        requester_name or "<unknown>"
+        requester_name or "<unknown>",
+        tostring(force)
     ))
-    core.after(0, run_migration)
+    core.after(0, function()
+        run_migration(force)
+    end)
     return true, "Migration scheduled to start now."
+end
+
+local function request_force_migration_confirmation(name)
+    pending_force_confirmations[name] = os.time() + force_confirmation_window_seconds
+    return false, "WARNING: This will erase and rebuild all shepherd database labels. Run /shepherd_v4_migrate_confirm within "
+        .. force_confirmation_window_seconds .. " seconds to proceed."
+end
+
+local function confirm_force_migration(name)
+    local expires_at = pending_force_confirmations[name]
+    if not expires_at then
+        return false, "No pending force migration request. Run /shepherd_v4_migrate force first."
+    end
+    pending_force_confirmations[name] = nil
+    if os.time() > expires_at then
+        return false, "Force migration confirmation expired. Run /shepherd_v4_migrate force again."
+    end
+    return trigger_manual_migration(name, true)
 end
 
 -- Execute migration after all mods are loaded (deferred to avoid startup ordering races)
@@ -415,11 +450,27 @@ core.register_on_joinplayer(function()
 end)
 
 core.register_chatcommand("shepherd_v4_migrate", {
+    params = "[force]",
+    description = "Prepare manual shepherd_v4_compat SQL migration (requires force + confirm)",
+    privs = { server = true },
+    func = function(name, param)
+        local normalized_param = (param or ""):match("^%s*(.-)%s*$")
+        if normalized_param == "force" then
+            return request_force_migration_confirmation(name)
+        end
+        if normalized_param ~= "" then
+            return false, "Invalid parameter. Use /shepherd_v4_migrate force"
+        end
+        return false, "Manual migration is destructive. Use /shepherd_v4_migrate force, then /shepherd_v4_migrate_confirm."
+    end,
+})
+
+core.register_chatcommand("shepherd_v4_migrate_confirm", {
     params = "",
-    description = "Run shepherd_v4_compat SQL map migration now",
+    description = "Confirm forced shepherd_v4_compat SQL migration",
     privs = { server = true },
     func = function(name)
-        return trigger_manual_migration(name)
+        return confirm_force_migration(name)
     end,
 })
 

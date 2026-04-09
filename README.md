@@ -121,7 +121,7 @@ Position is stored as separate x, y, z columns.
 - Processing time depends on world size
 - Progress is logged every 1000 mapblocks
 - Total processing time is reported when complete
-- Can also be triggered manually by server owners with `/shepherd_v4_migrate`
+- Can also be force-triggered manually by server owners (with confirmation) using `/shepherd_v4_migrate force`
 
 **LBM-Based Migration:**
 - Runs incrementally as mapblocks are loaded during gameplay
@@ -143,13 +143,19 @@ If migration appears to start too early in your stack, increase `shepherd_v4_mig
 
 ## Manual Migration Command
 
-Server owners can trigger SQL migration manually:
+Server owners can force a manual SQL migration:
 
 ```text
-/shepherd_v4_migrate
+/shepherd_v4_migrate force
+/shepherd_v4_migrate_confirm
 ```
 
-This command requires the `server` privilege.
+This flow requires the `server` privilege.
+
+`/shepherd_v4_migrate force` prints a warning and creates a short-lived confirmation window.
+`/shepherd_v4_migrate_confirm` must be run within that window to proceed.
+
+⚠️ Forced migration purges and rebuilds shepherd label data.
 
 When enabled, the mod logs:
 - Sampled mapblocks that produced labels (mapblock position, node position, mapchunk hash, labels, matched node names)

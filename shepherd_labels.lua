@@ -63,7 +63,7 @@ local migration_scheduled = false
 local migration_running = false
 local migration_complete = storage:get_string("migration_complete") == "true"
 local migration_armed_by_purge = false
-local pending_migration_purge_seq
+local pending_migration_purge_seq = nil
 local last_handled_migration_purge_seq = storage:get_int("last_handled_migration_purge_seq")
 
 -- Node to label mappings based on shepherd_v3_compat patterns
@@ -299,6 +299,8 @@ local function parse_purge_seq(raw_seq)
 end
 
 local function can_consume_migration_purge_seq(purge_seq)
+    -- Older shepherd versions can emit purge callbacks without purge_seq.
+    -- Allow these events so fallback reconciliation via last_purge_event still works.
     if not purge_seq then
         return true
     end
@@ -484,18 +486,25 @@ local function reconcile_with_shepherd_purge_state()
             for key, value in pairs(purge_state.event) do
                 event_data[key] = value
             end
-            if event_data.purge_seq == nil then
-                event_data.purge_seq = seq
-            end
         end
+        event_data.purge_seq = parse_purge_seq(event_data.purge_seq) or seq
         handle_database_purged(event_data)
         return
     end
 
     if type(ms.database.last_purge_event) == "function" then
+        core.log("action", string.format(
+            "[%s] Shepherd get_purge_state() unavailable, falling back to last_purge_event()",
+            mod_name
+        ))
         local ok, last_event = pcall(ms.database.last_purge_event)
         if ok and type(last_event) == "table" then
             handle_database_purged(last_event)
+        elseif not ok then
+            core.log("warning", string.format(
+                "[%s] Failed to query shepherd last purge event: %s",
+                mod_name, tostring(last_event)
+            ))
         end
     end
 end

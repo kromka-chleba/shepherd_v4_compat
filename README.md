@@ -35,17 +35,19 @@ The mod follows this data flow:
    - Mapblock position (x, y, z) → Node position (x×16, y×16, z×16)
 
 3. **Label Assignment** (`shepherd_labels.lua`): 
-   - Verifies required mapchunk labels are already defined by Exile
+    - Verifies required mapchunk labels are already defined by Exile
+    - Maps specific nodes to shepherd labels (e.g., `nodes_nature:salt_water_source` → `ocean` label)
+    - Checks node groups (e.g., `group:wet_sediment` → `moisture_spread` label)
+    - Detects seasonal soil patterns (e.g., nodes with `_spring` → `spring_soil` and `seasonal_plants` labels)
+    - Calls `ms.labels_to_position()` with node positions
+    - The shepherd API internally determines which mapchunk contains each node position and labels that mapchunk
+
+4. **Migration Orchestration** (`shepherd_migration.lua`):
    - Subscribes to `mapchunk_shepherd.database.register_on_purged()` and only starts migration after receiving `database_purged` with `reason = "migration"`
    - Reconciles at startup with `mapchunk_shepherd.database.get_purge_state()` to catch migration purges that happened before this mod was installed
    - Re-initializes the shepherd database after the confirmed purge event and before label writes
-   - Maps specific nodes to shepherd labels (e.g., `nodes_nature:salt_water_source` → `ocean` label)
-   - Checks node groups (e.g., `group:wet_sediment` → `moisture_spread` label)
-   - Detects seasonal soil patterns (e.g., nodes with `_spring` → `spring_soil` and `seasonal_plants` labels)
-   - Calls `ms.labels_to_position()` with node positions
-   - The shepherd API internally determines which mapchunk contains each node position and labels that mapchunk
 
-4. **Migration Execution**: Runs only after shepherd confirms a migration purge (live callback or durable purge-state reconciliation), then processes all mapblocks in the database.
+5. **Migration Execution**: Runs only after shepherd confirms a migration purge (live callback or durable purge-state reconciliation), then processes all mapblocks in the database.
 
 **Migration safety gate:** map migration does not run unless shepherd explicitly confirms that a migration purge happened via callback payload or durable purge state.
 

@@ -112,11 +112,19 @@ end
 -- Get labels for a specific node
 local function get_labels_for_node(node_name)
     local labels = {}
+    local seen = {}
+
+    local function add_label(label)
+        if not seen[label] then
+            table.insert(labels, label)
+            seen[label] = true
+        end
+    end
     
     -- Direct node name mapping
     if node_to_labels[node_name] then
         for _, label in ipairs(node_to_labels[node_name]) do
-            table.insert(labels, label)
+            add_label(label)
         end
     end
     
@@ -124,18 +132,18 @@ local function get_labels_for_node(node_name)
     for group, group_labels in pairs(group_to_labels) do
         if node_has_group(node_name, group) then
             for _, label in ipairs(group_labels) do
-                table.insert(labels, label)
+                add_label(label)
             end
         end
     end
 
     if seasonal_soil_name_set[node_name] then
-        table.insert(labels, "seasonal_plants")
-        table.insert(labels, "spring_soil")
+        add_label("seasonal_plants")
+        add_label("spring_soil")
     end
     if winter_soil_name_set[node_name] then
-        table.insert(labels, "seasonal_plants")
-        table.insert(labels, "winter_soil")
+        add_label("seasonal_plants")
+        add_label("winter_soil")
     end
     
     return labels

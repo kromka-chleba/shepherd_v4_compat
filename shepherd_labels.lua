@@ -355,35 +355,40 @@ local function run_migration()
     if migration_running then
         return
     end
-    migration_scheduled = false
     migration_running = true
 
     if should_skip_migration() then
         migration_armed_by_purge = false
+        migration_scheduled = false
         migration_running = false
         return
     end
     if not ensure_required_tags_defined() then
+        migration_scheduled = false
         migration_running = false
         return
     end
     if not ensure_shepherd_database_api() then
+        migration_scheduled = false
         migration_running = false
         return
     end
     if not migration_armed_by_purge then
         core.log("action", "[" .. mod_name .. "] Migration not armed by purge event, skipping.")
+        migration_scheduled = false
         migration_running = false
         return
     end
 
     if not initialize_shepherd_database() then
+        migration_scheduled = false
         migration_running = false
         return
     end
     local block_count, label_write_failures, elapsed = migrate_mapblocks()
     finalize_migration(block_count, label_write_failures, elapsed)
     migration_armed_by_purge = false
+    migration_scheduled = false
     migration_running = false
 end
 
@@ -426,7 +431,7 @@ local function request_manual_migration_purge(requester_name)
     end
 
     if not ensure_shepherd_database_api() then
-        return false, "Shepherd database API is missing required purge callback methods."
+        return false, "Shepherd database API is missing required methods (purge_for_migration, register_on_purged, or initialize)."
     end
 
     local ok, err_or_event = pcall(ms.database.purge_for_migration)

@@ -63,6 +63,8 @@ local migration_scheduled = false
 local migration_running = false
 local migration_complete = storage:get_string("migration_complete") == "true"
 local migration_armed_by_purge = false
+local pending_migration_purge_seq
+local last_handled_migration_purge_seq = storage:get_int("last_handled_migration_purge_seq")
 
 -- Node to label mappings based on shepherd_v3_compat patterns
 -- Multiple labels can be assigned to a position
@@ -284,6 +286,25 @@ local function is_migration_purge_event(event_data)
         and event_data.reason == "migration"
 end
 
+local function parse_purge_seq(raw_seq)
+    local seq = tonumber(raw_seq)
+    if not seq then
+        return nil
+    end
+    seq = math.floor(seq)
+    if seq <= 0 then
+        return nil
+    end
+    return seq
+end
+
+local function can_consume_migration_purge_seq(purge_seq)
+    if not purge_seq then
+        return true
+    end
+    return purge_seq > last_handled_migration_purge_seq
+end
+
 local function migrate_mapblocks()
     core.log("action", "[" .. mod_name .. "] Starting mapblock label migration...")
     core.chat_send_all("[" .. mod_name .. "] Starting world migration. This may take a while for large worlds...")
@@ -348,6 +369,10 @@ local function finalize_migration(block_count, label_write_failures, elapsed)
     core.chat_send_all(completion_msg)
     storage:set_string("migration_complete", "true")
     migration_complete = true
+    if pending_migration_purge_seq and pending_migration_purge_seq > last_handled_migration_purge_seq then
+        last_handled_migration_purge_seq = pending_migration_purge_seq
+        storage:set_int("last_handled_migration_purge_seq", last_handled_migration_purge_seq)
+    end
 end
 
 -- Run the migration
@@ -356,6 +381,7 @@ local function run_migration()
         migration_scheduled = false
         if clear_purge_arm then
             migration_armed_by_purge = false
+            pending_migration_purge_seq = nil
         end
         migration_running = false
     end
@@ -416,8 +442,59 @@ local function handle_database_purged(event_data)
     if migration_complete then
         return
     end
+    local purge_seq = parse_purge_seq(event_data.purge_seq)
+    if not can_consume_migration_purge_seq(purge_seq) then
+        return
+    end
     migration_armed_by_purge = true
+    pending_migration_purge_seq = purge_seq
     schedule_migration("database_purged:migration")
+end
+
+local function reconcile_with_shepherd_purge_state()
+    if migration_complete then
+        return
+    end
+    if type(ms.database.get_purge_state) == "function" then
+        local ok, purge_state = pcall(ms.database.get_purge_state)
+        if not ok then
+            core.log("warning", string.format(
+                "[%s] Failed to query shepherd purge state: %s",
+                mod_name, tostring(purge_state)
+            ))
+            return
+        end
+        if type(purge_state) ~= "table" then
+            return
+        end
+        local seq = parse_purge_seq(purge_state.seq)
+        if not can_consume_migration_purge_seq(seq) then
+            return
+        end
+        if purge_state.reason ~= "migration" then
+            return
+        end
+
+        local event_data = purge_state.event
+        if type(event_data) ~= "table" then
+            event_data = {
+                event = "database_purged",
+                reason = "migration",
+                purge_seq = seq,
+            }
+        elseif event_data.purge_seq == nil then
+            event_data.purge_seq = seq
+        end
+        handle_database_purged(event_data)
+        return
+    end
+
+    if type(ms.database.last_purge_event) == "function" then
+        local ok, last_event = pcall(ms.database.last_purge_event)
+        if ok and type(last_event) == "table" then
+            handle_database_purged(last_event)
+        end
+    end
 end
 
 local function request_manual_migration_purge(requester_name)
@@ -453,6 +530,7 @@ core.register_on_mods_loaded(function()
     end
 
     ms.database.register_on_purged(handle_database_purged)
+    reconcile_with_shepherd_purge_state()
 end)
 
 core.register_chatcommand("shepherd_v4_migrate", {

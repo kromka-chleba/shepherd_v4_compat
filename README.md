@@ -37,6 +37,7 @@ The mod follows this data flow:
 3. **Label Assignment** (`shepherd_labels.lua`): 
    - Verifies required mapchunk labels are already defined by Exile
    - Subscribes to `mapchunk_shepherd.database.register_on_purged()` and only starts migration after receiving `database_purged` with `reason = "migration"`
+   - Reconciles at startup with `mapchunk_shepherd.database.get_purge_state()` to catch migration purges that happened before this mod was installed
    - Re-initializes the shepherd database after the confirmed purge event and before label writes
    - Maps specific nodes to shepherd labels (e.g., `nodes_nature:salt_water_source` → `ocean` label)
    - Checks node groups (e.g., `group:wet_sediment` → `moisture_spread` label)
@@ -44,9 +45,9 @@ The mod follows this data flow:
    - Calls `ms.labels_to_position()` with node positions
    - The shepherd API internally determines which mapchunk contains each node position and labels that mapchunk
 
-4. **Migration Execution**: Runs only after shepherd emits a migration purge event, then processes all mapblocks in the database.
+4. **Migration Execution**: Runs only after shepherd confirms a migration purge (live callback or durable purge-state reconciliation), then processes all mapblocks in the database.
 
-**Migration safety gate:** map migration does not run unless shepherd explicitly confirms that a migration purge happened via purge callback payload.
+**Migration safety gate:** map migration does not run unless shepherd explicitly confirms that a migration purge happened via callback payload or durable purge state.
 
 **Requirements:**
 - Add `shepherd_v4_compat` to your trusted mods list in `minetest.conf`:
@@ -154,6 +155,7 @@ Server owners can trigger SQL migration manually:
 
 This command requires the `server` privilege.
 It requests `mapchunk_shepherd.database.purge_for_migration()`; migration starts only after shepherd emits the matching purge callback.
+If this mod is installed after a migration purge already happened, startup purge-state reconciliation (`get_purge_state`) will still trigger migration once.
 
 When enabled, the mod logs:
 - Sampled mapblocks that produced labels (mapblock position, node position, mapchunk hash, labels, matched node names)

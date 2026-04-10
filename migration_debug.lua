@@ -1,5 +1,5 @@
 shepherd_v4_compat = shepherd_v4_compat or {}
-shepherd_v4_compat.migration_debug = shepherd_v4_compat.migration_debug or {}
+shepherd_v4_compat.migration_debug = {}
 local migration_debug_module = shepherd_v4_compat.migration_debug
 
 local function sorted_keys(t)

@@ -44,8 +44,6 @@ if type(ensure_required_tags_defined) ~= "function" then
     error("[" .. mod_name .. "] Migration context missing ensure_required_tags_defined")
 end
 
-shepherd_v4_compat.migration_ctx = nil
-
 local migration_scheduled = false
 local migration_running = false
 local migration_complete = storage:get_string("migration_complete") == "true"

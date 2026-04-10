@@ -2,7 +2,18 @@
 -- This provides v4 compatibility by re-labeling mapchunks after database format changes
 -- Note: SQL stores mapblocks, we convert to node positions, shepherd labels mapchunks
 
-local mod_name = "shepherd_v4_compat"
+if not shepherd_v4_compat then
+    error("[shepherd_v4_compat] Shared module table is not initialized")
+end
+
+local mod_name = shepherd_v4_compat.mod_name
+if not mod_name then
+    error("[shepherd_v4_compat] Module name is not initialized")
+end
+local mod_path = shepherd_v4_compat.mod_path
+if not mod_path then
+    error("[" .. mod_name .. "] Module path is not initialized")
+end
 
 -- This file requires insecure environment and will only run if available
 -- Note: insecure environment must be requested in init.lua; retrieve it from the module table
@@ -12,26 +23,18 @@ if not secenv then
     return false
 end
 
-local function require_module(path, file_name)
-    local loaded = dofile(path)
-    if not loaded then
-        error("[" .. mod_name .. "] Failed to load " .. file_name)
-    end
-    return loaded
-end
+dofile(mod_path .. "/sql_map_reader.lua")
+dofile(mod_path .. "/migration_debug.lua")
 
-local sql_map_reader = require_module(
-    core.get_modpath(mod_name) .. "/sql_map_reader.lua",
-    "sql_map_reader.lua"
-)
-local migration_debug = require_module(
-    core.get_modpath(mod_name) .. "/migration_debug.lua",
-    "migration_debug.lua"
-)
-local shepherd_migration = require_module(
-    core.get_modpath(mod_name) .. "/shepherd_migration.lua",
-    "shepherd_migration.lua"
-)
+local sql_map_reader = shepherd_v4_compat.sql_map_reader
+local migration_debug = shepherd_v4_compat.migration_debug
+
+if not sql_map_reader then
+    error("[" .. mod_name .. "] Module sql_map_reader.lua did not register in shepherd_v4_compat table")
+end
+if not migration_debug then
+    error("[" .. mod_name .. "] Module migration_debug.lua did not register in shepherd_v4_compat table")
+end
 
 assert(mapchunk_shepherd, "mapchunk_shepherd mod must be loaded before shepherd_v4_compat")
 local ms = mapchunk_shepherd
@@ -246,7 +249,7 @@ local function ensure_required_tags_defined()
     return true
 end
 
-shepherd_migration.setup({
+shepherd_v4_compat.migration_ctx = {
     core = core,
     mod_name = mod_name,
     ms = ms,
@@ -256,7 +259,12 @@ shepherd_migration.setup({
     sql_map_reader = sql_map_reader,
     process_mapblock = process_mapblock,
     ensure_required_tags_defined = ensure_required_tags_defined,
-})
+}
+
+dofile(mod_path .. "/shepherd_migration.lua")
+if not shepherd_v4_compat.shepherd_migration then
+    error("[" .. mod_name .. "] Module shepherd_migration.lua did not register in shepherd_v4_compat table")
+end
 
 -- Return true to indicate successful loading
 return true

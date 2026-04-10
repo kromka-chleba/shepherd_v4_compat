@@ -196,4 +196,4 @@ function sql_map_reader.iterate_blocks(callback)
     ))
 end
 
-return sql_map_reader
+shepherd_v4_compat.sql_map_reader = sql_map_reader

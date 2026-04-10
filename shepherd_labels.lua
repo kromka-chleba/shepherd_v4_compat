@@ -6,7 +6,10 @@ if not shepherd_v4_compat then
     error("[shepherd_v4_compat] Shared module table is not initialized")
 end
 
-local mod_name = shepherd_v4_compat.mod_name or "shepherd_v4_compat"
+local mod_name = shepherd_v4_compat.mod_name
+if not mod_name then
+    error("[shepherd_v4_compat] Module name is not initialized")
+end
 local mod_path = shepherd_v4_compat.mod_path
 if not mod_path then
     error("[" .. mod_name .. "] Module path is not initialized")

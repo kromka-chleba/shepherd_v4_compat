@@ -1,4 +1,6 @@
-local migration_debug_module = {}
+shepherd_v4_compat = shepherd_v4_compat or {}
+shepherd_v4_compat.migration_debug = shepherd_v4_compat.migration_debug or {}
+local migration_debug_module = shepherd_v4_compat.migration_debug
 
 local function sorted_keys(t)
     local keys = {}
@@ -89,5 +91,3 @@ function migration_debug_module.new(opts)
 
     return ctx
 end
-
-return migration_debug_module

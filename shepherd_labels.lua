@@ -2,7 +2,8 @@
 -- This provides v4 compatibility by re-labeling mapchunks after database format changes
 -- Note: SQL stores mapblocks, we convert to node positions, shepherd labels mapchunks
 
-local mod_name = "shepherd_v4_compat"
+local mod_name = shepherd_v4_compat.mod_name
+local mod_path = shepherd_v4_compat.mod_path
 
 -- This file requires insecure environment and will only run if available
 -- Note: insecure environment must be requested in init.lua; retrieve it from the module table
@@ -12,26 +13,23 @@ if not secenv then
     return false
 end
 
-local function require_module(path, file_name)
-    local loaded = dofile(path)
-    if not loaded then
-        error("[" .. mod_name .. "] Failed to load " .. file_name)
-    end
-    return loaded
-end
+dofile(mod_path .. "/sql_map_reader.lua")
+dofile(mod_path .. "/migration_debug.lua")
+dofile(mod_path .. "/shepherd_migration.lua")
 
-local sql_map_reader = require_module(
-    core.get_modpath(mod_name) .. "/sql_map_reader.lua",
-    "sql_map_reader.lua"
-)
-local migration_debug = require_module(
-    core.get_modpath(mod_name) .. "/migration_debug.lua",
-    "migration_debug.lua"
-)
-local shepherd_migration = require_module(
-    core.get_modpath(mod_name) .. "/shepherd_migration.lua",
-    "shepherd_migration.lua"
-)
+local sql_map_reader = shepherd_v4_compat.sql_map_reader
+local migration_debug = shepherd_v4_compat.migration_debug
+local shepherd_migration = shepherd_v4_compat.shepherd_migration
+
+if not sql_map_reader then
+    error("[" .. mod_name .. "] Failed to load sql_map_reader.lua")
+end
+if not migration_debug then
+    error("[" .. mod_name .. "] Failed to load migration_debug.lua")
+end
+if not shepherd_migration then
+    error("[" .. mod_name .. "] Failed to load shepherd_migration.lua")
+end
 
 assert(mapchunk_shepherd, "mapchunk_shepherd mod must be loaded before shepherd_v4_compat")
 local ms = mapchunk_shepherd

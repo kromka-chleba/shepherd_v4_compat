@@ -303,4 +303,4 @@ function shepherd_migration.setup(opts)
     })
 end
 
-return shepherd_migration
+shepherd_v4_compat.shepherd_migration = shepherd_migration

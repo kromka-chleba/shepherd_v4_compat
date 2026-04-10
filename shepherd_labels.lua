@@ -32,13 +32,13 @@ local migration_debug = shepherd_v4_compat.migration_debug
 local shepherd_migration = shepherd_v4_compat.shepherd_migration
 
 if not sql_map_reader then
-    error("[" .. mod_name .. "] Failed to load sql_map_reader.lua")
+    error("[" .. mod_name .. "] Module sql_map_reader.lua did not register in shepherd_v4_compat table")
 end
 if not migration_debug then
-    error("[" .. mod_name .. "] Failed to load migration_debug.lua")
+    error("[" .. mod_name .. "] Module migration_debug.lua did not register in shepherd_v4_compat table")
 end
 if not shepherd_migration then
-    error("[" .. mod_name .. "] Failed to load shepherd_migration.lua")
+    error("[" .. mod_name .. "] Module shepherd_migration.lua did not register in shepherd_v4_compat table")
 end
 
 assert(mapchunk_shepherd, "mapchunk_shepherd mod must be loaded before shepherd_v4_compat")

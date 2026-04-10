@@ -1,4 +1,6 @@
-shepherd_v4_compat = shepherd_v4_compat or {}
+if not shepherd_v4_compat then
+    error("[shepherd_v4_compat] Shared module table is not initialized")
+end
 shepherd_v4_compat.migration_debug = {}
 local migration_debug_module = shepherd_v4_compat.migration_debug
 
